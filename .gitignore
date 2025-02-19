@@ -1,3 +1,4 @@
 **/*.csv
 **/*.json
 **/*.joblib
+**/catboost_info
