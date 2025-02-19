@@ -4,6 +4,7 @@ import warnings; warnings.simplefilter('ignore')
 import os
 import sys
 import csv
+import shutil
 import contextlib
 from glob import glob
 from functools import partial
@@ -26,7 +27,9 @@ NAME = 'conduit-01'
 # if False: uses ensemble combination with best CV score
 SUBMIT_FULL_ENSEMBLE = True
 
-INCLUDE_FIT_ON_KAGGLE = True
+# if True: model fit is run on kaggle
+# if False: saved models from local run are used from a kaggle dataset
+INCLUDE_FIT_ON_KAGGLE = False
 
 PROVE_MY_SCORE_IS_SAME = False
 
@@ -423,14 +426,5 @@ if __name__ == '__main__':
     cv_score()
     predict()
 
-    for fn in glob(f'{CSV_PATH}/*.csv'):
-        os.remove(fn)
-
-    for fn in glob(f'{MODEL_PATH}/*.joblib'):
-        os.remove(fn)
-
-    for fn in glob(f'./catboost_info/**'):
-        os.remove(fn)
-
     for path in [CSV_PATH, MODEL_PATH, 'catboost_info']:
-        os.rmdir(path)
+        shutil.rmtree(path)
