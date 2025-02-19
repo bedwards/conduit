@@ -2,3 +2,4 @@
 **/*.json
 **/*.joblib
 **/catboost_info
+**/__pycache__
