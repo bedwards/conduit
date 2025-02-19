@@ -426,5 +426,10 @@ if __name__ == '__main__':
     cv_score()
     predict()
 
-    for path in [CSV_PATH, MODEL_PATH, 'catboost_info']:
-        shutil.rmtree(path)
+    shutil.rmtree(CSV_PATH)
+
+    if INCLUDE_FIT_ON_KAGGLE:
+        shutil.rmtree('catboost_info')
+    else:
+        shutil.rmtree(MODEL_PATH)
+
