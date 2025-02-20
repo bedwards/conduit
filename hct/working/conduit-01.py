@@ -7,7 +7,7 @@ import csv
 import shutil
 import contextlib
 from glob import glob
-from functools import partial
+from functools import cache
 from collections import defaultdict
 from itertools import combinations, starmap
 import numpy as np
@@ -27,7 +27,7 @@ NAME = 'conduit-01'
 
 # if True: submission.csv created using all models from PIPE
 # if False: uses ensemble combination with best CV score
-SUBMIT_FULL_ENSEMBLE = True
+SUBMIT_FULL_ENSEMBLE = False
 
 # if True: model fit is run on kaggle
 # if False: saved models from local run are used from a kaggle dataset
@@ -120,18 +120,54 @@ if RUNNING_ON_KAGGLE:
         if pipe['m'] == 'lgb':
             pipe['kwargs'] = dict(device='gpu', **pipe['kwargs'])
 
-sns.set_palette('deep')
 
 def read_csv(path):
     df = pd.read_csv(path).set_index('ID')
     df.index = df.index.astype('int32')
     fn = path.split('/')[-1].split('.')[0]
-    if fn.startswith('X_') and fn.endswith('_raw'):
-        df = pd.concat([df.select_dtypes('float').astype('float32'),
-                        df.select_dtypes('object').astype('category')],
-                        axis=1)
     print(f'read {path}')
     return df
+
+
+train = read_csv(f'{C_PATH}/train.csv')
+test = read_csv(f'{C_PATH}/test.csv')
+
+
+@cache
+def get_X(train_or_test, name):
+    X = pd.concat([train.drop(columns=['efs', 'efs_time']),
+                   test])
+
+    Xf = X.select_dtypes('float').astype('float32')
+    Xc = X.select_dtypes('object').astype('category')
+
+    if name == 'raw':
+        for col in Xc:
+            if Xc[col].isna().any():
+                Xc[col] = Xc[col].cat.add_categories('Missing').fillna('Missing')
+
+    elif name == 'label':
+        for col in Xc:
+            Xc[col], _ = Xc[col].factorize(use_na_sentinel=False)
+            Xc[col] = Xc[col].astype('int32').astype('category')
+
+    elif name == 'onehot':
+        Xc = pd.get_dummies(Xc, drop_first=True, dtype='int32')
+        Xc.columns = Xc.columns.str.replace(r'[\[\]<]', '_', regex=True)
+
+    else:
+        raise
+
+    X = pd.concat([Xf, Xc], axis=1)
+
+    if train_or_test == 'train':
+        return X[:len(train)]
+
+    if train_or_test == 'test':
+        return X[len(train):]
+
+    raise
+
 
 def plot_y_transformation(Y_name, Y):
     if RUNNING_ON_KAGGLE:
@@ -169,73 +205,32 @@ def plot_y_transformation(Y_name, Y):
         plt.tight_layout()
         plt.show()
 
-def preprocess():
-    print('preprocess')
-    train = read_csv(f'{C_PATH}/train.csv')
-    test = read_csv(f'{C_PATH}/test.csv')
-    X = train.drop(columns=['efs', 'efs_time'])
-    X = pd.concat([X, test])
-    Xf = X.select_dtypes('float').astype('float32')
-    Xc_raw = X.select_dtypes('object').astype('category')
 
-    for col in Xc_raw:
-        if Xc_raw[col].isna().any():
-            Xc_raw[col] = Xc_raw[col].cat.add_categories('Missing').fillna('Missing')
+@cache
+def get_y(name):
+    if name == 'naf':
+        naf = NelsonAalenFitter(label='y')
+        naf.fit(train['efs_time'], event_observed=train['efs'])
+        Y = train[['efs', 'efs_time']].join(-naf.cumulative_hazard_, on='efs_time')
+        title = 'Nelson Aalen cumulative hazard'
 
-    X_raw = pd.concat([Xf, Xc_raw], axis=1)
-    Xc = X.select_dtypes('object').astype('category')
+    elif name == 'kmf':
+        kmf = KaplanMeierFitter(label='y')
+        kmf.fit(train['efs_time'], event_observed=train['efs'])
+        Y = train[['efs', 'efs_time']].join(kmf.survival_function_, on='efs_time')
+        title = 'Kaplan Meier survival'
 
-    for col in Xc:
-        Xc[col], _ = Xc[col].factorize(use_na_sentinel=False)
-        Xc[col] = Xc[col].astype('int32').astype('category')
+    elif name == 'cox':
+        Y = train[['efs', 'efs_time']]
+        Y['y'] = train['efs_time']
+        Y.loc[Y['efs'] == 0, 'y'] *= -1
+        title = 'XGB survival:cox, LGBM Cox'
 
-    X_label = pd.concat([Xf, Xc], axis=1)
-    Xc = pd.get_dummies(Xc, drop_first=True, dtype='int32')
-    Xc.columns = Xc.columns.str.replace(r'[\[\]<]', '_', regex=True)
-    X_onehot = pd.concat([Xf, Xc], axis=1)
+    else:
+        raise
 
-    naf = NelsonAalenFitter(label='y')
-    naf.fit(train['efs_time'], event_observed=train['efs'])
-    Y_naf = train[['efs', 'efs_time']].join(-naf.cumulative_hazard_, on='efs_time')
-    plot_y_transformation('NelsonAalenFitter', Y_naf)
-    y_naf = Y_naf['y']
-
-    kmf = KaplanMeierFitter(label='y')
-    kmf.fit(train['efs_time'], event_observed=train['efs'])
-    Y_kmf = train[['efs', 'efs_time']].join(kmf.survival_function_, on='efs_time')
-    plot_y_transformation('KaplanMeierFitter', Y_kmf)
-    y_kmf = Y_kmf['y']
-
-    Y_cox = train[['efs', 'efs_time']]
-    Y_cox['y'] = train['efs_time']
-    Y_cox.loc[Y_cox['efs'] == 0, 'y'] *= -1
-    plot_y_transformation('XGB survival:cox, LGBM Cox', Y_cox)
-    y_cox = Y_cox['y']
-
-    for n, data in [('X_train_raw', X_raw.iloc[:len(train)]),
-                    ('X_train_label', X_label.iloc[:len(train)]),
-                    ('X_train_onehot', X_onehot.iloc[:len(train)]),
-                    ('X_test_raw', X_raw.iloc[len(train):]),
-                    ('X_test_label', X_label.iloc[len(train):]),
-                    ('X_test_onehot', X_onehot.iloc[len(train):]),
-                    ('y_naf', y_naf),
-                    ('y_kmf', y_kmf),
-                    ('y_cox', y_cox)]:
-        filename = f'{CSV_PATH}/{n}.csv'
-        data.to_csv(filename)
-        print(f'wrote {filename}')
-
-
-def get_Xs(train_or_test):
-    return {'raw': read_csv(f'{CSV_PATH}/X_{train_or_test}_raw.csv'),
-            'label': read_csv(f'{CSV_PATH}/X_{train_or_test}_label.csv'),
-            'onehot': read_csv(f'{CSV_PATH}/X_{train_or_test}_onehot.csv')}
-
-
-def get_ys():
-    return {'naf': read_csv(f'{CSV_PATH}/y_naf.csv'),
-            'kmf': read_csv(f'{CSV_PATH}/y_kmf.csv'),
-            'cox': read_csv(f'{CSV_PATH}/y_cox.csv')}
+    plot_y_transformation(title, Y)
+    return Y['y']
 
 
 def create_kfold():
@@ -243,27 +238,30 @@ def create_kfold():
 
 
 def fit_fold_model(X, y, fold_n, i_fold, i_oof, m_name, m):
-    fit_kwargs = dict(eval_set=[(X.iloc[i_oof], y.iloc[i_oof])])
-
-    # fit_kwargs = dict(eval_set=[
-    #         (X.iloc[i_fold], y.iloc[i_fold]),
-    #         (X.iloc[i_oof], y.iloc[i_oof]),
-    # ])
+    fit_kwargs = dict(eval_set=[
+            # (X.iloc[i_fold], y.iloc[i_fold]),
+            (X.iloc[i_oof], y.iloc[i_oof])])
 
     if m_name.startswith('xgb'):
         fit_kwargs['verbose'] = False
+
+    if fold_n == 0:
+        msg = [f'{m_name}.fit']
+
+        for k, v in fit_kwargs.items():
+            msg.append(f'  {k}={str(v)[:60]}')
+
+        print('\n'.join(msg))
 
     m.fit(X.iloc[i_fold], y.iloc[i_fold], **fit_kwargs)
 
     filename = f'{MODEL_PATH}/{NAME}-{m_name}-{fold_n}.joblib'
     joblib.dump(m, filename)
-    print(f'fold {fold_n} wrote {filename}')
+    print(f'wrote {filename}')
 
 
 def fit():
     print('\nfit')
-    Xs = get_Xs('train')
-    ys = get_ys()
     kfold = create_kfold()
 
     m_constructors = {
@@ -275,25 +273,33 @@ def fit():
     models = []
 
     for pipe in PIPES:
-        Model = m_constructors[pipe['m'].split('_')[0]]
-        if pipe['m'].startswith('cb') and pipe['X'] in ['raw', 'label']:
-            pipe['kwargs']['cat_features'] = Xs[pipe['X']].select_dtypes('category').columns.to_list()
+        X = get_X('train', pipe['X'])
 
-        print(f'{Model.__name__}')
+        if pipe['m'].startswith('cb') and pipe['X'] in ['raw', 'label']:
+            pipe['kwargs']['cat_features'] = X.select_dtypes('category'
+                        ).columns.to_list()
+
+            if not pipe['kwargs']['cat_features']:
+                raise
+
+        m_name = pipe['m']
+        Model = m_constructors[m_name.split('_')[0]]
+
+        models.append((
+            m_name,
+            Model(**pipe['kwargs']),
+            X,
+            get_y(pipe['y']),
+        ))
+
+        print(f'{m_name}')
 
         for k, v in pipe['kwargs'].items():
             print(f'  {k}={v}')
 
-        models.append((
-            pipe['m'],
-            Model(**pipe['kwargs']),
-            Xs[pipe['X']],
-            ys[pipe['y']],
-        ))
-
     args = []
 
-    for fold_n, (i_fold, i_oof) in enumerate(kfold.split(Xs['raw'])):
+    for fold_n, (i_fold, i_oof) in enumerate(kfold.split(train)):
 
         for m_name, m, X, y in models:
             args.append((X, y, fold_n, i_fold, i_oof, m_name, m))
@@ -306,7 +312,7 @@ def fit():
             pool.starmap(fit_fold_model, args)
 
 
-def calc_score(train, y_pred_oof):
+def calc_score(y_pred_oof):
     merged_df = train[['race_group', 'efs_time', 'efs']].assign(prediction=y_pred_oof)
     merged_df = merged_df.reset_index()
     merged_df_race_dict = dict(merged_df.groupby(['race_group']).groups)
@@ -327,18 +333,17 @@ def calc_score(train, y_pred_oof):
 
 def cv_score():
     print('\nCV score')
-    train = read_csv(f'{C_PATH}/train.csv')
-    Xs = get_Xs('train')
     kfold = create_kfold()
     y_pred_oofs = defaultdict(lambda: np.zeros(len(train)))
 
     for fold_n, (i_fold, i_oof) in enumerate(kfold.split(train)):
         for pipe in PIPES:
             m_name = pipe['m']
+            X = get_X('train', pipe['X'])
             for fn in glob(f'{MODEL_PATH}/{NAME}-{m_name}-{fold_n}.joblib'):
                 m = joblib.load(fn)
                 print(f'read {fn}')
-                y_pred_oofs[pipe['m']][i_oof] = m.predict(Xs[pipe['X']].iloc[i_oof])
+                y_pred_oofs[m_name][i_oof] = m.predict(X.iloc[i_oof])
 
     for m_name, raw_risk_score in y_pred_oofs.items():
         y_pred_oofs[m_name] = rankdata(raw_risk_score)
@@ -357,7 +362,7 @@ def cv_score():
         for m_combo in combinations(y_pred_oofs.items(), r):
             m_names, ranked_risk_scores = zip(*m_combo)
             m_names = '-'.join(m_names)
-            score = calc_score(train, sum(ranked_risk_scores))
+            score = calc_score(sum(ranked_risk_scores))
             lb_pct = leaderboard_percentile(score)
             scores.append((score, lb_pct, m_names))
 
@@ -396,7 +401,6 @@ def cv_score():
 
 def predict():
     print('\npredict')
-
     fn = f'{CSV_PATH}/scores.csv'
     row_models_len_max = 0
 
@@ -416,21 +420,16 @@ def predict():
 
     msg = 'full ensemble' if SUBMIT_FULL_ENSEMBLE else 'ensemble with best CV score'
     print(f'using {msg}: {cv_score:.4f} {lb_pct:.4f} {m_names}')
-
-    Xs = get_Xs('test')
-    m_name_Xs = []
+    y_preds = defaultdict(lambda: np.zeros(len(test)))
 
     for pipe in PIPES:
         if pipe['m'] in m_names:
-            m_name_Xs.append((pipe['m'], Xs[pipe['X']]))
-
-    y_preds = defaultdict(partial(np.zeros, len(Xs['raw'])))
-
-    for m_name, X in m_name_Xs:
-        for fn in glob(f'{MODEL_PATH}/{NAME}-{m_name}-*.joblib'):
-            m = joblib.load(fn)
-            print(f'read {fn}')
-            y_preds[m_name] += m.predict(X)
+            m_name = pipe['m']
+            X = get_X('test', pipe['X'])
+            for fn in glob(f'{MODEL_PATH}/{NAME}-{m_name}-*.joblib'):
+                m = joblib.load(fn)
+                print(f'read {fn}')
+                y_preds[m_name] += m.predict(X)
 
     kfold = create_kfold()
 
@@ -439,17 +438,13 @@ def predict():
         y_preds[m_name] = rankdata(y_preds[m_name])
 
     y_pred = sum(y_preds.values())
-    s = pd.DataFrame(y_pred, index=Xs['raw'].index, columns=['prediction'])
+    s = pd.DataFrame(y_pred, index=test.index, columns=['prediction'])
     s.to_csv('submission.csv')
     print('wrote submission.csv')
 
 
 if __name__ == '__main__':
     if not RUNNING_ON_KAGGLE:
-        if sys.argv[1:] and sys.argv[1] == 'preprocess':
-            preprocess()
-            sys.exit()
-
         if sys.argv[1:] and sys.argv[1] == 'cv_score':
             cv_score()
             sys.exit()
@@ -464,14 +459,12 @@ if __name__ == '__main__':
         for fn in glob(f'{MODEL_PATH}/*.joblib'):
             os.remove(fn)
 
-        preprocess()
         fit()
         cv_score()
         predict()
         sys.exit()
 
     # running on kaggle
-    preprocess()
     if INCLUDE_FIT_ON_KAGGLE:
         fit()
     cv_score()
