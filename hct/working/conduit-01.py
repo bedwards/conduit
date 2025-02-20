@@ -15,6 +15,8 @@ import pandas as pd
 import xgboost as xgb
 import catboost as cb
 import lightgbm as lgb
+import matplotlib.pyplot as plt
+import seaborn as sns
 from scipy.stats import rankdata
 from sklearn.model_selection import KFold
 from lifelines import KaplanMeierFitter, NelsonAalenFitter
@@ -118,6 +120,7 @@ if RUNNING_ON_KAGGLE:
         if pipe['m'] == 'lgb':
             pipe['kwargs'] = dict(device='gpu', **pipe['kwargs'])
 
+sns.set_palette('deep')
 
 def read_csv(path):
     df = pd.read_csv(path).set_index('ID')
@@ -130,6 +133,41 @@ def read_csv(path):
     print(f'read {path}')
     return df
 
+def plot_y_transformation(Y_name, Y):
+    if RUNNING_ON_KAGGLE:
+        fig, axes = plt.subplots(2, 2, figsize=(6, 4), sharey=True)  # Increased height from 5 to 8
+        plt.subplots_adjust(hspace=0.3)
+        fig.suptitle(f'Y transformation: {Y_name}', fontsize='medium')
+
+        sns.histplot(Y,
+                     y='y',
+                     hue='efs',
+                     ax=axes[0, 0])
+
+        sns.scatterplot(Y,
+                        x='efs_time',
+                        y='y',
+                        hue='efs',
+                        ax=axes[0, 1])
+
+        sns.scatterplot(Y[Y['efs'] == 0],
+                        x='efs_time',
+                        y='y',
+                        label='efs=0',
+                        ax=axes[1, 0])
+
+        axes[1, 0].legend()
+
+        sns.scatterplot(Y[Y['efs'] == 1],
+                        x='efs_time',
+                        y='y',
+                        label='efs=1',
+                        color=sns.color_palette()[1],
+                        ax=axes[1, 1])
+
+        axes[1, 1].legend()
+        plt.tight_layout()
+        plt.show()
 
 def preprocess():
     print('preprocess')
@@ -155,16 +193,24 @@ def preprocess():
     Xc = pd.get_dummies(Xc, drop_first=True, dtype='int32')
     Xc.columns = Xc.columns.str.replace(r'[\[\]<]', '_', regex=True)
     X_onehot = pd.concat([Xf, Xc], axis=1)
+
     naf = NelsonAalenFitter(label='y')
     naf.fit(train['efs_time'], event_observed=train['efs'])
-    y_naf = -train[['efs_time']].join(naf.cumulative_hazard_, on='efs_time')['y']
+    Y_naf = train[['efs', 'efs_time']].join(-naf.cumulative_hazard_, on='efs_time')
+    plot_y_transformation('NelsonAalenFitter', Y_naf)
+    y_naf = Y_naf['y']
+
     kmf = KaplanMeierFitter(label='y')
     kmf.fit(train['efs_time'], event_observed=train['efs'])
-    y_kmf = train[['efs_time']].join(kmf.survival_function_, on='efs_time')['y']
-    y_cox = train[['efs']]
-    y_cox['y'] = train['efs_time']
-    y_cox.loc[y_cox['efs'] == 0, 'y'] *= -1
-    y_cox = y_cox['y']
+    Y_kmf = train[['efs', 'efs_time']].join(kmf.survival_function_, on='efs_time')
+    plot_y_transformation('KaplanMeierFitter', Y_kmf)
+    y_kmf = Y_kmf['y']
+
+    Y_cox = train[['efs', 'efs_time']]
+    Y_cox['y'] = train['efs_time']
+    Y_cox.loc[Y_cox['efs'] == 0, 'y'] *= -1
+    plot_y_transformation('XGB survival:cox, LGBM Cox', Y_cox)
+    y_cox = Y_cox['y']
 
     for n, data in [('X_train_raw', X_raw.iloc[:len(train)]),
                     ('X_train_label', X_label.iloc[:len(train)]),
@@ -232,6 +278,11 @@ def fit():
         Model = m_constructors[pipe['m'].split('_')[0]]
         if pipe['m'].startswith('cb') and pipe['X'] in ['raw', 'label']:
             pipe['kwargs']['cat_features'] = Xs[pipe['X']].select_dtypes('category').columns.to_list()
+
+        print(f'{Model.__name__}')
+
+        for k, v in pipe['kwargs'].items():
+            print(f'  {k}={v}')
 
         models.append((
             pipe['m'],
@@ -430,6 +481,4 @@ if __name__ == '__main__':
 
     if INCLUDE_FIT_ON_KAGGLE:
         shutil.rmtree('catboost_info')
-    else:
         shutil.rmtree(MODEL_PATH)
-
