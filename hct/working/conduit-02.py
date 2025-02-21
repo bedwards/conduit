@@ -89,28 +89,31 @@ kwargs_lgb = dict(
     verbosity=-1,
 )
 
+# 0.6730 0.2806 xgb-lgb-cb-xgb_cox-cb_cox
+# 0.6732 0.2806 xgb-cb-xgb_cox-cb_cox
+
 # Pipeline configurations combining different models and target transformations
 PIPES = [
-    {
-        "m": "xgb",  # unique. lgb, xgb, cb, or lgb_extrainfo, etc.
+    {  # m must be unique. lgb, xgb, cb, or lgb_extrainfo, etc.
+        "m": "xgb",  # 0.6674 0.2302 xgb
         "X": "label",  # raw, label, onehot
         "y": "kmf",  # kmf, naf, cox
         "kwargs": kwargs_xgb,
     },
     {
-        "m": "lgb",
+        "m": "lgb",  # 0.6659 0.2196 lgb
         "X": "label",
         "y": "kmf",
         "kwargs": kwargs_lgb,
     },
     {
-        "m": "cb",
+        "m": "cb",  # 0.6655 0.2196 cb
         "X": "label",
         "y": "kmf",
         "kwargs": kwargs_cb,
     },
     {
-        "m": "xgb_cox",
+        "m": "xgb_cox",  # 0.6669 0.2242 xgb_cox
         "X": "label",
         "y": "cox",
         "kwargs": dict(
@@ -118,14 +121,14 @@ PIPES = [
         ),
     },
     {
-        "m": "cb_cox",
+        "m": "cb_cox",  # 0.6651 0.2196 cb_cox
         "X": "label",
         "y": "cox",
         "kwargs": dict(
             loss_function="Cox", iterations=400, use_best_model=False, **kwargs_cb
         ),
     },
-    # High priority: KMF by race variations which address race-specific survival patterns
+    # KMF by race variations which address race-specific survival patterns
     {
         "m": "xgb_kmfbyrace",  # 0.6716 0.2671 xgb_kmfbyrace
         "X": "label",
@@ -144,7 +147,7 @@ PIPES = [
         "y": "kmfbyrace",
         "kwargs": kwargs_cb,
     },
-    # Medium priority: Logit scaled variations for better handling of time distributions
+    # MeLogit scaled variations for better handling of time distributions
     {
         "m": "xgb_logitscaled",  # 0.6621 0.2065 xgb_logitscaled
         "X": "label",
@@ -163,7 +166,7 @@ PIPES = [
         "y": "logitscaled",
         "kwargs": kwargs_cb,
     },
-    # Lower priority: NAF variations as alternative survival analysis
+    # LNAF variations as alternative survival analysis
     {
         "m": "xgb_naf",
         "X": "label",
@@ -198,10 +201,9 @@ if RUNNING_ON_KAGGLE:
         if pipe["m"] == "lgb":
             pipe["kwargs"] = dict(device="gpu", **pipe["kwargs"])
 
-# Helper function to read and preprocess CSV files
-
 
 def read_csv(path):
+    """Helper function to read and preprocess CSV files"""
     df = pd.read_csv(path).set_index("ID")
     df.index = df.index.astype("int32")
     fn = path.split("/")[-1].split(".")[0]
@@ -213,11 +215,10 @@ def read_csv(path):
 train = read_csv(f"{C_PATH}/train.csv")
 test = read_csv(f"{C_PATH}/test.csv")
 
-# Feature engineering function with caching for efficiency
-
 
 @cache
 def get_X(train_or_test, name):
+    """Feature engineering function with caching for efficiency"""
     # Combine train and test for consistent preprocessing
     X = pd.concat([train.drop(columns=["efs", "efs_time"]), test])
 
@@ -255,10 +256,8 @@ def get_X(train_or_test, name):
     raise
 
 
-# Visualization function for target transformations
-
-
 def plot_y_transformation(Y_name, Y):
+    """Visualization function for target transformations"""
     if RUNNING_ON_KAGGLE:
         fig, axes = plt.subplots(2, 2, figsize=(6, 4), sharey=True)
         plt.subplots_adjust(hspace=0.3)
@@ -288,9 +287,9 @@ def plot_y_transformation(Y_name, Y):
         plt.show()
 
 
-# Target transformation function with caching
 @cache
 def get_y(name):
+    """Target transformation function with caching"""
     # Different survival analysis transformations
     if name == "naf":
         naf = NelsonAalenFitter(label="y")
@@ -348,17 +347,33 @@ def get_y(name):
     return Y["y"]
 
 
-# Create consistent cross-validation splits
-
-
 def create_kfold():
+    """Create consistent cross-validation splits"""
     return KFold(n_splits=10, shuffle=True, random_state=42)
 
 
-# Train individual fold model and save to disk
+def fit_fold_model(pipe, fold_n, i_fold, i_oof):
+    """Train individual fold model and save to disk"""
+    m_name, m_kwargs, X_name, y_name = [pipe[k] for k in ["m", "kwargs", "X", "y"]]
+    X = get_X("train", X_name)
+    y = get_y(y_name)
 
+    if m_name.startswith("cb") and X_name in ["raw", "label"]:
+        m_kwargs["cat_features"] = X.select_dtypes("category").columns.to_list()
 
-def fit_fold_model(X, y, fold_n, i_fold, i_oof, m_name, m):
+        if not m_kwargs["cat_features"]:
+            raise
+
+    # Map model names to their constructor classes
+    m_constructors = {
+        "xgb": xgb.XGBRegressor,
+        "lgb": lgb.LGBMRegressor,
+        "cb": cb.CatBoostRegressor,
+    }
+
+    Model = m_constructors[m_name.split("_")[0]]
+    m = Model(**m_kwargs)
+
     fit_kwargs = dict(
         eval_set=[
             # (X.iloc[i_fold], y.iloc[i_fold]),
@@ -384,58 +399,17 @@ def fit_fold_model(X, y, fold_n, i_fold, i_oof, m_name, m):
     print(f"wrote {filename}")
 
 
-# Main training function
-
-
 def fit():
+    """Main training function"""
     print("\nfit")
     kfold = create_kfold()
-
-    # Map model names to their constructor classes
-    m_constructors = {
-        "xgb": xgb.XGBRegressor,
-        "lgb": lgb.LGBMRegressor,
-        "cb": cb.CatBoostRegressor,
-    }
-
-    models = []
-
-    # Initialize all models from PIPES configuration
-    for pipe in PIPES:
-        X = get_X("train", pipe["X"])
-
-        if pipe["m"].startswith("cb") and pipe["X"] in ["raw", "label"]:
-            pipe["kwargs"]["cat_features"] = X.select_dtypes(
-                "category"
-            ).columns.to_list()
-
-            if not pipe["kwargs"]["cat_features"]:
-                raise
-
-        m_name = pipe["m"]
-        Model = m_constructors[m_name.split("_")[0]]
-
-        models.append(
-            (
-                m_name,
-                Model(**pipe["kwargs"]),
-                X,
-                get_y(pipe["y"]),
-            )
-        )
-
-        print(f"{m_name}")
-
-        for k, v in pipe["kwargs"].items():
-            print(f"  {k}={v}")
 
     args = []
 
     # Create training tasks for each fold and model
     for fold_n, (i_fold, i_oof) in enumerate(kfold.split(train)):
-
-        for m_name, m, X, y in models:
-            args.append((X, y, fold_n, i_fold, i_oof, m_name, m))
+        for pipe in PIPES:
+            args.append((pipe, fold_n, i_fold, i_oof))
 
     # Execute training tasks (sequential on Kaggle, parallel locally)
     if RUNNING_ON_KAGGLE:
@@ -443,14 +417,12 @@ def fit():
     else:
         from multiprocessing import Pool
 
-        with Pool(min(os.cpu_count(), kfold.get_n_splits() * len(models))) as pool:
+        with Pool(min(os.cpu_count(), kfold.get_n_splits() * len(args))) as pool:
             pool.starmap(fit_fold_model, args)
 
 
-# Calculate competition metric
-
-
 def calc_score(y_pred_oof):
+    """Calculate competition metric"""
     merged_df = train[["race_group", "efs_time", "efs"]].assign(prediction=y_pred_oof)
     merged_df = merged_df.reset_index()
     merged_df_race_dict = dict(merged_df.groupby(["race_group"]).groups)
@@ -473,10 +445,8 @@ def calc_score(y_pred_oof):
     return float(np.mean(metric_list) - np.sqrt(np.var(metric_list)))
 
 
-# Calculate cross-validation scores
-
-
 def cv_score():
+    """Calculate cross-validation scores"""
     print("\nCV score")
     kfold = create_kfold()
     y_pred_oofs = defaultdict(lambda: np.zeros(len(train)))
@@ -557,8 +527,8 @@ def cv_score():
             print(f"{score:.4f} {lb_pct:.4f} {m_names}")
 
 
-# Generate predictions for submission
 def predict():
+    """Generate predictions for submission"""
     print("\npredict")
     fn = f"{CSV_PATH}/scores.csv"
     row_models_len_max = 0
