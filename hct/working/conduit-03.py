@@ -28,6 +28,12 @@ from lifelines import KaplanMeierFitter, NelsonAalenFitter
 from lifelines.utils import concordance_index
 import joblib
 
+from survival import (
+    KMFTransformer,
+    NAFTransformer,
+    StratifiedKMF,
+    LogitScaledTransformer,
+)
 from hct import HCTCompetition
 
 # Unique identifier for this experiment
@@ -52,6 +58,17 @@ CSV_PATH = f"./csv/{NAME}"
 os.makedirs(CSV_PATH, exist_ok=True)
 
 MODEL_PATH = "../input/hct-conduit"
+
+RACE_WEIGHTS = {
+    "American Indian or Alaska Native": 0.68,
+    "Asian": 0.7,
+    "Black or African-American": 0.67,
+    "More than one race": 0.68,
+    "Native Hawaiian or other Pacific Islander": 0.66,
+    "White": 0.64,
+}
+
+RACE_WEIGHTS = tuple((k, v) for k, v in RACE_WEIGHTS.items())
 
 # Detect if running in Kaggle environment
 try:
@@ -170,6 +187,27 @@ PIPES = [
         "y": "naf",
         "kwargs": kwargs_cb,
     },
+    {
+        "m": "xgb_stratified",
+        "X": "label",
+        "y": "stratified_kmf",
+        "y_kwargs": {"group_weights": RACE_WEIGHTS, "gap_factor": 0.7},
+        "kwargs": kwargs_xgb,
+    },
+    {
+        "m": "lgb_stratified",
+        "X": "label",
+        "y": "stratified_kmf",
+        "y_kwargs": {"group_weights": RACE_WEIGHTS, "gap_factor": 0.7},
+        "kwargs": kwargs_lgb,
+    },
+    {
+        "m": "cb_stratified",
+        "X": "label",
+        "y": "stratified_kmf",
+        "y_kwargs": {"group_weights": RACE_WEIGHTS, "gap_factor": 0.7},
+        "kwargs": kwargs_cb,
+    },
 ]
 
 # Configure GPU usage when running on Kaggle
@@ -187,20 +225,8 @@ if RUNNING_ON_KAGGLE:
             pipe["kwargs"] = dict(device="gpu", **pipe["kwargs"])
 
 
-def read_csv(path):
-    """Helper function to read and preprocess CSV files"""
-    df = pd.read_csv(path).set_index("ID")
-    df.index = df.index.astype("int32")
-    fn = path.split("/")[-1].split(".")[0]
-    print(f"read {path}")
-    return df
-
-
 competition = HCTCompetition()
 train, test = competition.read_data()
-# features = competition.identify_feature_types(train)
-# FEATURES = features['all']
-# CATS = features['categorical']
 
 
 @cache
@@ -275,60 +301,54 @@ def plot_y_transformation(Y_name, Y):
 
 
 @cache
-def get_y(name):
+def get_y(name, **kwargs):
     """Target transformation function with caching"""
-    # Different survival analysis transformations
+    Y = train[["efs", "efs_time"]]
+
     if name == "naf":
-        naf = NelsonAalenFitter(label="y")
-        naf.fit(train["efs_time"], event_observed=train["efs"])
-        Y = train[["efs", "efs_time"]].join(-naf.cumulative_hazard_, on="efs_time")
+        transformer = NAFTransformer()
+        Y["y"] = transformer.fit_transform(
+            train["efs_time"].values, train["efs"].values
+        )
         title = "Nelson Aalen cumulative hazard"
 
     elif name == "kmf":
-        kmf = KaplanMeierFitter(label="y")
-        kmf.fit(train["efs_time"], event_observed=train["efs"])
-        Y = train[["efs", "efs_time"]].join(kmf.survival_function_, on="efs_time")
+        transformer = KMFTransformer()
+        Y["y"] = transformer.fit_transform(
+            train["efs_time"].values, train["efs"].values
+        )
         title = "Kaplan Meier survival"
 
     elif name == "cox":
-        Y = train[["efs", "efs_time"]]
         Y["y"] = train["efs_time"]
         Y.loc[Y["efs"] == 0, "y"] *= -1
         title = "XGB survival:cox, LGBM Cox"
 
     elif name == "kmfbyrace":
-        Y = train[["efs", "efs_time", "race_group"]].copy()
-        Y["y"] = 0
-        for race in Y["race_group"].unique():
-            mask = Y["race_group"] == race
-            kmf = KaplanMeierFitter()
-            kmf.fit(Y.loc[mask, "efs_time"], Y.loc[mask, "efs"])
-            Y.loc[mask, "y"] = kmf.survival_function_at_times(
-                Y.loc[mask, "efs_time"]
-            ).values
-            # Add gap adjustment for efs=0
-            gap = (
-                0.7
-                * (
-                    Y.loc[(mask) & (Y["efs"] == 0), "y"].max()
-                    - Y.loc[(mask) & (Y["efs"] == 1), "y"].min()
-                )
-                / 2
-            )
-            Y.loc[(mask) & (Y["efs"] == 0), "y"] -= gap
+        transformer = StratifiedKMF(gap_factor=0.7)
+        Y["y"] = transformer.fit_transform(
+            train["efs_time"].values, train["efs"].values, train["race_group"].values
+        )
         title = "Kaplan Meier survival by race"
 
+    elif name == "stratified_kmf":
+        if "group_weights" in kwargs:
+            kwargs["group_weights"] = {k: v for k, v in kwargs["group_weights"]}
+        transformer = StratifiedKMF(**kwargs)
+        Y["y"] = transformer.fit_transform(
+            train["efs_time"].values, train["efs"].values, train["race_group"].values
+        )
+        title = "Stratified Kaplan Meier survival"
+
     elif name == "logitscaled":
-        Y = train[["efs", "efs_time"]].copy()
-        max_time, min_time = 80, -100
-        Y["y"] = Y["efs_time"] / (max_time - min_time)
-        Y["y"] = Y["y"].apply(lambda x: np.log(x) - np.log(1 - x))
-        Y["y"] += 10
-        Y["y"] = -Y["y"]
-        title = "logit scaled"
+        transformer = LogitScaledTransformer()
+        Y["y"] = transformer.fit_transform(
+            train["efs_time"].values, train["efs"].values
+        )
+        title = "Logit scaled"
 
     else:
-        raise
+        raise ValueError(f"Unknown target transformation: {name}")
 
     plot_y_transformation(title, Y)
     return Y["y"]
@@ -341,9 +361,13 @@ def create_kfold():
 
 def fit_fold_model(pipe, fold_n, i_fold, i_oof):
     """Train individual fold model and save to disk"""
-    m_name, m_kwargs, X_name, y_name = [pipe[k] for k in ["m", "kwargs", "X", "y"]]
+    m_name, m_kwargs, X_name, y_name, y_kwargs = [
+        pipe[k] for k in ["m", "kwargs", "X", "y", "y_kwargs"]
+    ]
+    if not y_kwargs:
+        y_kwargs = {}
     X = get_X("train", X_name)
-    y = get_y(y_name)
+    y = get_y(y_name, **y_kwargs)
 
     if m_name.startswith("cb") and X_name in ["raw", "label"]:
         m_kwargs["cat_features"] = X.select_dtypes("category").columns.to_list()

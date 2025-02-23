@@ -12,14 +12,6 @@ class HCTCompetition(Competition):
 
     def __init__(self):
         super().__init__("hct", "../input/equity-post-HCT-survival-predictions")
-        self.race_weights = {
-            "American Indian or Alaska Native": 0.68,
-            "Asian": 0.7,
-            "Black or African-American": 0.67,
-            "More than one race": 0.68,
-            "Native Hawaiian or other Pacific Islander": 0.66,
-            "White": 0.64,
-        }
 
     def read_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Read and preprocess train/test data"""
