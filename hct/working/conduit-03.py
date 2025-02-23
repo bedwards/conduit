@@ -98,24 +98,24 @@ kwargs_lgb = dict(
 
 # Pipeline configurations combining different models and target transformations
 PIPES = [
-    # {  # m must be unique. lgb, xgb, cb, or lgb_extrainfo, etc.
-    #     "m": "xgb",  # 0.6674 0.2302 xgb
-    #     "X": "label",  # raw, label, onehot
-    #     "y": "kmf",  # kmf, naf, cox
-    #     "kwargs": kwargs_xgb,
-    # },
-    # {
-    #     "m": "lgb",  # 0.6659 0.2196 lgb
-    #     "X": "label",
-    #     "y": "kmf",
-    #     "kwargs": kwargs_lgb,
-    # },
-    # {
-    #     "m": "cb",  # 0.6655 0.2196 cb
-    #     "X": "label",
-    #     "y": "kmf",
-    #     "kwargs": kwargs_cb,
-    # },
+    {  # m must be unique. lgb, xgb, cb, or lgb_extrainfo, etc.
+        "m": "xgb",  # 0.6674 0.2302 xgb
+        "X": "label",  # raw, label, onehot
+        "y": "kmf",  # kmf, naf, cox
+        "kwargs": kwargs_xgb,
+    },
+    {
+        "m": "lgb",  # 0.6659 0.2196 lgb
+        "X": "label",
+        "y": "kmf",
+        "kwargs": kwargs_lgb,
+    },
+    {
+        "m": "cb",  # 0.6655 0.2196 cb
+        "X": "label",
+        "y": "kmf",
+        "kwargs": kwargs_cb,
+    },
     {
         "m": "xgb_cox",  # 0.6669 0.2242 xgb_cox
         "X": "label",
@@ -152,24 +152,24 @@ PIPES = [
         "kwargs": kwargs_cb,
     },
     # LNAF variations as alternative survival analysis
-    # {
-    #     "m": "xgb_naf",  # 0.6700 0.2494 xgb_naf
-    #     "X": "label",
-    #     "y": "naf",
-    #     "kwargs": kwargs_xgb,
-    # },
-    # {
-    #     "m": "lgb_naf",  # 0.6685 0.2370 lgb_naf
-    #     "X": "label",
-    #     "y": "naf",
-    #     "kwargs": kwargs_lgb,
-    # },
-    # {
-    #     "m": "cb_naf",  # 0.6696 0.2494 cb_naf
-    #     "X": "label",
-    #     "y": "naf",
-    #     "kwargs": kwargs_cb,
-    # },
+    {
+        "m": "xgb_naf",  # 0.6700 0.2494 xgb_naf
+        "X": "label",
+        "y": "naf",
+        "kwargs": kwargs_xgb,
+    },
+    {
+        "m": "lgb_naf",  # 0.6685 0.2370 lgb_naf
+        "X": "label",
+        "y": "naf",
+        "kwargs": kwargs_lgb,
+    },
+    {
+        "m": "cb_naf",  # 0.6696 0.2494 cb_naf
+        "X": "label",
+        "y": "naf",
+        "kwargs": kwargs_cb,
+    },
 ]
 
 # Configure GPU usage when running on Kaggle
