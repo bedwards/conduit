@@ -4,6 +4,7 @@
 import warnings
 
 warnings.simplefilter("ignore")
+
 import os
 import sys
 import csv
@@ -13,6 +14,7 @@ from glob import glob
 from functools import cache
 from collections import defaultdict
 from itertools import combinations, starmap
+
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -25,6 +27,8 @@ from sklearn.model_selection import KFold
 from lifelines import KaplanMeierFitter, NelsonAalenFitter
 from lifelines.utils import concordance_index
 import joblib
+
+from hct import HCTCompetition
 
 # Unique identifier for this experiment
 NAME = "conduit-03"
@@ -192,9 +196,11 @@ def read_csv(path):
     return df
 
 
-# Load train and test data
-train = read_csv(f"{C_PATH}/train.csv")
-test = read_csv(f"{C_PATH}/test.csv")
+competition = HCTCompetition()
+train, test = competition.read_data()
+# features = competition.identify_feature_types(train)
+# FEATURES = features['all']
+# CATS = features['categorical']
 
 
 @cache
