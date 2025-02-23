@@ -4,13 +4,15 @@ from pathlib import Path
 import joblib
 from typing import Dict, List, Callable, Union, Any
 
+
 class Competition:
     """Base class for Kaggle competitions"""
+
     def __init__(self, name: str, input_path: str):
         self.name = name
         self.input_path = Path(input_path)
         self.is_kaggle = self._detect_kaggle()
-        
+
     def _detect_kaggle(self) -> bool:
         try:
             get_ipython
@@ -24,11 +26,13 @@ class Competition:
         print(f"Read {filename}")
         return df
 
+
 class Pipeline:
     """Handles model pipeline configuration and execution"""
+
     def __init__(self, models: List[Dict[str, Any]]):
         self.models = models
-        
+
     def fit(self, X: pd.DataFrame, y: pd.Series):
         """Fit all models in pipeline"""
         pass
@@ -37,9 +41,12 @@ class Pipeline:
         """Generate predictions from pipeline"""
         pass
 
+
 class ModelWrapper:
     """Base wrapper for ML models"""
+
     pass
+
 
 def rank_ensemble(predictions: List[np.ndarray]) -> np.ndarray:
     """Combine predictions using rank averaging"""
