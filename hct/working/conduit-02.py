@@ -480,7 +480,7 @@ def cv_score():
     for r in range(1, len(y_pred_oofs) + 1):
         for m_combo in combinations(y_pred_oofs.items(), r):
             m_names, ranked_risk_scores = zip(*m_combo)
-            m_names = "-".join(m_names)
+            m_names = ", ".join(m_names)
             score = calc_score(sum(ranked_risk_scores))
             lb_pct = leaderboard_percentile(score)
             scores.append((score, lb_pct, m_names))
