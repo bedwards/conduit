@@ -1,0 +1,1047 @@
+================================================================================
+DATASET OVERVIEW
+================================================================================
+Train shape: (28800, 60)
+Test shape: (3, 58)
+
+================================================================================
+COLUMN INFORMATION
+================================================================================
+
+Column types:
+ID                          int64
+dri_score                  object
+psych_disturb              object
+cyto_score                 object
+diabetes                   object
+hla_match_c_high          float64
+hla_high_res_8            float64
+tbi_status                 object
+arrhythmia                 object
+hla_low_res_6             float64
+graft_type                 object
+vent_hist                  object
+renal_issue                object
+pulm_severe                object
+prim_disease_hct           object
+hla_high_res_6            float64
+cmv_status                 object
+hla_high_res_10           float64
+hla_match_dqb1_high       float64
+tce_imm_match              object
+hla_nmdp_6                float64
+hla_match_c_low           float64
+rituximab                  object
+hla_match_drb1_low        float64
+hla_match_dqb1_low        float64
+prod_type                  object
+cyto_score_detail          object
+conditioning_intensity     object
+ethnicity                  object
+year_hct                    int64
+obesity                    object
+mrd_hct                    object
+in_vivo_tcd                object
+tce_match                  object
+hla_match_a_high          float64
+hepatic_severe             object
+donor_age                 float64
+prior_tumor                object
+hla_match_b_low           float64
+peptic_ulcer               object
+age_at_hct                float64
+hla_match_a_low           float64
+gvhd_proph                 object
+rheum_issue                object
+sex_match                  object
+hla_match_b_high          float64
+race_group                 object
+comorbidity_score         float64
+karnofsky_score           float64
+hepatic_mild               object
+tce_div_match              object
+donor_related              object
+melphalan_dose             object
+hla_low_res_8             float64
+cardiac                    object
+hla_match_drb1_high       float64
+pulm_moderate              object
+hla_low_res_10            float64
+efs                       float64
+efs_time                  float64
+dtype: object
+
+Numerical columns (25): ['ID', 'hla_match_c_high', 'hla_high_res_8', 'hla_low_res_6', 'hla_high_res_6', 'hla_high_res_10', 'hla_match_dqb1_high', 'hla_nmdp_6', 'hla_match_c_low', 'hla_match_drb1_low', 'hla_match_dqb1_low', 'year_hct', 'hla_match_a_high', 'donor_age', 'hla_match_b_low', 'age_at_hct', 'hla_match_a_low', 'hla_match_b_high', 'comorbidity_score', 'karnofsky_score', 'hla_low_res_8', 'hla_match_drb1_high', 'hla_low_res_10', 'efs', 'efs_time']
+
+Categorical columns (35): ['dri_score', 'psych_disturb', 'cyto_score', 'diabetes', 'tbi_status', 'arrhythmia', 'graft_type', 'vent_hist', 'renal_issue', 'pulm_severe', 'prim_disease_hct', 'cmv_status', 'tce_imm_match', 'rituximab', 'prod_type', 'cyto_score_detail', 'conditioning_intensity', 'ethnicity', 'obesity', 'mrd_hct', 'in_vivo_tcd', 'tce_match', 'hepatic_severe', 'prior_tumor', 'peptic_ulcer', 'gvhd_proph', 'rheum_issue', 'sex_match', 'race_group', 'hepatic_mild', 'tce_div_match', 'donor_related', 'melphalan_dose', 'cardiac', 'pulm_moderate']
+
+================================================================================
+MISSING VALUES
+================================================================================
+
+Columns with missing values:
+                        Missing Train  ...  Missing Test %
+tce_match                       18996  ...       66.666667
+mrd_hct                         16597  ...       66.666667
+cyto_score_detail               11923  ...       66.666667
+tce_div_match                   11396  ...       33.333333
+tce_imm_match                   11133  ...       33.333333
+cyto_score                       8068  ...       66.666667
+hla_high_res_10                  7163  ...       33.333333
+hla_high_res_8                   5829  ...       33.333333
+hla_high_res_6                   5284  ...        0.000000
+hla_match_dqb1_high              5199  ...        0.000000
+hla_low_res_10                   5064  ...        0.000000
+conditioning_intensity           4789  ...       66.666667
+hla_match_c_high                 4620  ...       33.333333
+hla_match_a_high                 4301  ...        0.000000
+hla_nmdp_6                       4197  ...        0.000000
+hla_match_dqb1_low               4194  ...        0.000000
+hla_match_b_high                 4088  ...        0.000000
+hla_low_res_8                    3653  ...        0.000000
+hla_match_drb1_high              3352  ...        0.000000
+hla_low_res_6                    3270  ...        0.000000
+hla_match_c_low                  2800  ...        0.000000
+hla_match_drb1_low               2643  ...        0.000000
+hla_match_b_low                  2565  ...        0.000000
+cardiac                          2542  ...        0.000000
+peptic_ulcer                     2419  ...        0.000000
+hla_match_a_low                  2390  ...        0.000000
+arrhythmia                       2202  ...        0.000000
+rheum_issue                      2183  ...        0.000000
+rituximab                        2148  ...        0.000000
+pulm_severe                      2135  ...        0.000000
+diabetes                         2119  ...        0.000000
+psych_disturb                    2062  ...        0.000000
+pulm_moderate                    2047  ...        0.000000
+hepatic_mild                     1917  ...        0.000000
+renal_issue                      1915  ...        0.000000
+hepatic_severe                   1871  ...        0.000000
+donor_age                        1808  ...       66.666667
+obesity                          1760  ...        0.000000
+prior_tumor                      1678  ...        0.000000
+melphalan_dose                   1405  ...        0.000000
+karnofsky_score                   870  ...        0.000000
+cmv_status                        634  ...        0.000000
+ethnicity                         587  ...        0.000000
+comorbidity_score                 477  ...        0.000000
+sex_match                         261  ...        0.000000
+vent_hist                         259  ...        0.000000
+in_vivo_tcd                       225  ...        0.000000
+gvhd_proph                        225  ...        0.000000
+donor_related                     158  ...        0.000000
+dri_score                         154  ...        0.000000
+
+[50 rows x 4 columns]
+
+================================================================================
+TARGET VARIABLE ANALYSIS
+================================================================================
+
+EFS (Event) Statistics:
+efs
+1.0    15532
+0.0    13268
+Name: count, dtype: int64
+Event rate: 0.5393
+
+EFS Time Statistics:
+count    28800.000000
+mean        23.237678
+std         24.799748
+min          0.333000
+25%          5.619750
+50%          9.796500
+75%         35.100000
+max        156.819000
+Name: efs_time, dtype: float64
+
+EFS Time by Event Status:
+       count       mean        std    min      25%     50%      75%      max
+efs                                                                         
+0.0  13268.0  43.121212  24.258854  3.212  25.2735  37.194  54.4525  156.819
+1.0  15532.0   6.252439   3.386629  0.333   4.4770   5.803   7.3220  120.009
+
+================================================================================
+RACE GROUP ANALYSIS
+================================================================================
+
+Race Group Distribution:
+race_group
+More than one race                           4845
+Asian                                        4832
+White                                        4831
+Black or African-American                    4795
+American Indian or Alaska Native             4790
+Native Hawaiian or other Pacific Islander    4707
+Name: count, dtype: int64
+
+Percentage by Race Group:
+race_group
+More than one race                           16.822917
+Asian                                        16.777778
+White                                        16.774306
+Black or African-American                    16.649306
+American Indian or Alaska Native             16.631944
+Native Hawaiian or other Pacific Islander    16.343750
+Name: count, dtype: float64
+
+Event Rate by Race Group:
+race_group
+American Indian or Alaska Native             0.510438
+Asian                                        0.551531
+Black or African-American                    0.558707
+More than one race                           0.465841
+Native Hawaiian or other Pacific Islander    0.523476
+White                                        0.625543
+Name: efs, dtype: float64
+
+EFS Time Statistics by Race Group:
+                                            count       mean  ...      75%      max
+race_group                                                    ...                  
+American Indian or Alaska Native           4790.0  24.164618  ...  36.0435  153.711
+Asian                                      4832.0  22.627618  ...  35.4830  153.292
+Black or African-American                  4795.0  21.812383  ...  33.2085  148.967
+More than one race                         4845.0  25.913350  ...  38.6560  154.249
+Native Hawaiian or other Pacific Islander  4707.0  23.066415  ...  34.2505  155.283
+White                                      4831.0  21.826907  ...  31.9520  156.819
+
+[6 rows x 8 columns]
+
+================================================================================
+CATEGORICAL VARIABLES ANALYSIS
+================================================================================
+
+dri_score - 11 unique values:
+dri_score
+Intermediate                                         10436
+N/A - pediatric                                       4779
+High                                                  4701
+N/A - non-malignant indication                        2427
+TBD cytogenetics                                      2003
+Low                                                   1926
+High - TED AML case <missing cytogenetics             1414
+Intermediate - TED AML case <missing cytogenetics      481
+N/A - disease not classifiable                         272
+Very high                                              198
+Missing disease status                                   9
+Name: count, dtype: int64
+
+psych_disturb - 3 unique values:
+psych_disturb
+No          23005
+Yes          3587
+Not done      146
+Name: count, dtype: int64
+
+cyto_score - 7 unique values:
+cyto_score
+Poor            8802
+Intermediate    6376
+Favorable       3011
+TBD             1341
+Normal           643
+Other            504
+Not tested        55
+Name: count, dtype: int64
+
+diabetes - 3 unique values:
+diabetes
+No          22201
+Yes          4339
+Not done      141
+Name: count, dtype: int64
+
+tbi_status - 8 unique values:
+tbi_status
+No TBI                              18861
+TBI + Cy +- Other                    6104
+TBI +- Other, <=cGy                  1727
+TBI +- Other, >cGy                   1700
+TBI +- Other, -cGy, single            134
+TBI +- Other, -cGy, fractionated      119
+TBI +- Other, -cGy, unknown dose       79
+TBI +- Other, unknown dose             76
+Name: count, dtype: int64
+
+arrhythmia - 3 unique values:
+arrhythmia
+No          25203
+Yes          1277
+Not done      118
+Name: count, dtype: int64
+
+graft_type - 2 unique values:
+graft_type
+Peripheral blood    20546
+Bone marrow          8254
+Name: count, dtype: int64
+
+vent_hist - 2 unique values:
+vent_hist
+No     27721
+Yes      820
+Name: count, dtype: int64
+
+renal_issue - 3 unique values:
+renal_issue
+No          26548
+Yes           200
+Not done      137
+Name: count, dtype: int64
+
+pulm_severe - 3 unique values:
+pulm_severe
+No          24779
+Yes          1706
+Not done      180
+Name: count, dtype: int64
+
+prim_disease_hct - 18 unique values:
+prim_disease_hct
+ALL                     8102
+AML                     7135
+MDS                     3046
+IPA                     1719
+MPN                     1656
+IEA                     1449
+NHL                     1319
+IIS                     1024
+PCD                      869
+SAA                      713
+AI                       449
+HIS                      445
+Other leukemia           366
+Solid tumor              207
+IMD                      144
+Other acute leukemia      83
+HD                        54
+CML                       20
+Name: count, dtype: int64
+
+cmv_status - 4 unique values:
+cmv_status
++/+    13596
+-/+     7081
++/-     4048
+-/-     3441
+Name: count, dtype: int64
+
+tce_imm_match - 8 unique values:
+tce_imm_match
+P/P    13114
+G/G     2522
+H/H     1084
+G/B      544
+H/B      229
+P/H       83
+P/B       66
+P/G       25
+Name: count, dtype: int64
+
+rituximab - 2 unique values:
+rituximab
+No     26033
+Yes      619
+Name: count, dtype: int64
+
+prod_type - 2 unique values:
+prod_type
+PB    20381
+BM     8419
+Name: count, dtype: int64
+
+cyto_score_detail - 5 unique values:
+cyto_score_detail
+Intermediate    11158
+Poor             3323
+Favorable        1208
+TBD              1043
+Not tested        145
+Name: count, dtype: int64
+
+conditioning_intensity - 6 unique values:
+conditioning_intensity
+MAC                              12288
+RIC                               7722
+NMA                               3479
+TBD                                373
+No drugs reported                   87
+N/A, F(pre-TED) not submitted       62
+Name: count, dtype: int64
+
+ethnicity - 3 unique values:
+ethnicity
+Not Hispanic or Latino      24482
+Hispanic or Latino           3347
+Non-resident of the U.S.      384
+Name: count, dtype: int64
+
+obesity - 3 unique values:
+obesity
+No          25144
+Yes          1779
+Not done      117
+Name: count, dtype: int64
+
+mrd_hct - 2 unique values:
+mrd_hct
+Negative    8068
+Positive    4135
+Name: count, dtype: int64
+
+in_vivo_tcd - 2 unique values:
+in_vivo_tcd
+No     17591
+Yes    10984
+Name: count, dtype: int64
+
+tce_match - 4 unique values:
+tce_match
+Permissive            6272
+GvH non-permissive    1605
+Fully matched         1059
+HvG non-permissive     868
+Name: count, dtype: int64
+
+hepatic_severe - 3 unique values:
+hepatic_severe
+No          25238
+Yes          1481
+Not done      210
+Name: count, dtype: int64
+
+prior_tumor - 3 unique values:
+prior_tumor
+No          23828
+Yes          3009
+Not done      285
+Name: count, dtype: int64
+
+peptic_ulcer - 3 unique values:
+peptic_ulcer
+No          25956
+Yes           259
+Not done      166
+Name: count, dtype: int64
+
+gvhd_proph - 17 unique values:
+gvhd_proph
+FK+ MMF +- others                  10440
+Cyclophosphamide alone              5270
+FK+ MTX +- others(not MMF)          4262
+Cyclophosphamide +- others          2369
+CSA + MMF +- others(not FK)         2278
+FKalone                             1230
+Other GVHD Prophylaxis               550
+TDEPLETION alone                     545
+TDEPLETION +- other                  539
+No GvHD Prophylaxis                  262
+CDselect alone                       251
+CSA + MTX +- others(not MMF,FK)      224
+CSA alone                            214
+Parent Q = yes, but no agent          62
+CDselect +- other                     55
+CSA +- others(not FK,MMF,MTX)         23
+FK+- others(not MMF,MTX)               1
+Name: count, dtype: int64
+
+rheum_issue - 3 unique values:
+rheum_issue
+No          26015
+Yes           457
+Not done      145
+Name: count, dtype: int64
+
+sex_match - 4 unique values:
+sex_match
+M-M    7980
+F-M    7822
+M-F    6715
+F-F    6022
+Name: count, dtype: int64
+
+hepatic_mild - 3 unique values:
+hepatic_mild
+No          24989
+Yes          1754
+Not done      140
+Name: count, dtype: int64
+
+tce_div_match - 4 unique values:
+tce_div_match
+Permissive mismatched            12936
+GvH non-permissive                2458
+HvG non-permissive                1417
+Bi-directional non-permissive      593
+Name: count, dtype: int64
+
+donor_related - 3 unique values:
+donor_related
+Related                     16208
+Unrelated                   12088
+Multiple donor (non-UCB)      346
+Name: count, dtype: int64
+
+melphalan_dose - 2 unique values:
+melphalan_dose
+N/A, Mel not given    20135
+MEL                    7260
+Name: count, dtype: int64
+
+cardiac - 3 unique values:
+cardiac
+No          24592
+Yes          1519
+Not done      147
+Name: count, dtype: int64
+
+pulm_moderate - 3 unique values:
+pulm_moderate
+No          21338
+Yes          5249
+Not done      166
+Name: count, dtype: int64
+
+================================================================================
+NUMERICAL VARIABLES ANALYSIS
+================================================================================
+
+hla_match_c_high statistics:
+count    24180.000000
+mean         1.764516
+std          0.431941
+min          0.000000
+25%          2.000000
+50%          2.000000
+75%          2.000000
+max          2.000000
+Name: hla_match_c_high, dtype: float64
+
+hla_high_res_8 statistics:
+count    22971.000000
+mean         6.876801
+std          1.564313
+min          2.000000
+25%          6.000000
+50%          8.000000
+75%          8.000000
+max          8.000000
+Name: hla_high_res_8, dtype: float64
+
+hla_low_res_6 statistics:
+count    25530.000000
+mean         5.143322
+std          1.207757
+min          2.000000
+25%          4.000000
+50%          6.000000
+75%          6.000000
+max          6.000000
+Name: hla_low_res_6, dtype: float64
+
+hla_high_res_6 statistics:
+count    23516.000000
+mean         5.109202
+std          1.214162
+min          0.000000
+25%          4.000000
+50%          6.000000
+75%          6.000000
+max          6.000000
+Name: hla_high_res_6, dtype: float64
+
+hla_high_res_10 statistics:
+count    21637.000000
+mean         8.617230
+std          1.905125
+min          3.000000
+25%          7.000000
+50%         10.000000
+75%         10.000000
+max         10.000000
+Name: hla_high_res_10, dtype: float64
+
+hla_match_dqb1_high statistics:
+count    23601.000000
+mean         1.736876
+std          0.447687
+min          0.000000
+25%          1.000000
+50%          2.000000
+75%          2.000000
+max          2.000000
+Name: hla_match_dqb1_high, dtype: float64
+
+hla_nmdp_6 statistics:
+count    24603.000000
+mean         5.160346
+std          1.203240
+min          2.000000
+25%          4.000000
+50%          6.000000
+75%          6.000000
+max          6.000000
+Name: hla_nmdp_6, dtype: float64
+
+hla_match_c_low statistics:
+count    26000.000000
+mean         1.757808
+std          0.435453
+min          0.000000
+25%          2.000000
+50%          2.000000
+75%          2.000000
+max          2.000000
+Name: hla_match_c_low, dtype: float64
+
+hla_match_drb1_low statistics:
+count    26157.000000
+mean         1.715296
+std          0.451282
+min          1.000000
+25%          1.000000
+50%          2.000000
+75%          2.000000
+max          2.000000
+Name: hla_match_drb1_low, dtype: float64
+
+hla_match_dqb1_low statistics:
+count    24606.000000
+mean         1.773795
+std          0.427130
+min          0.000000
+25%          2.000000
+50%          2.000000
+75%          2.000000
+max          2.000000
+Name: hla_match_dqb1_low, dtype: float64
+
+year_hct statistics:
+count    28800.000000
+mean      2015.179444
+std          3.153914
+min       2008.000000
+25%       2013.000000
+50%       2016.000000
+75%       2018.000000
+max       2020.000000
+Name: year_hct, dtype: float64
+
+hla_match_a_high statistics:
+count    24499.000000
+mean         1.703743
+std          0.462213
+min          0.000000
+25%          1.000000
+50%          2.000000
+75%          2.000000
+max          2.000000
+Name: hla_match_a_high, dtype: float64
+
+donor_age statistics:
+count    26992.000000
+mean        42.511591
+std         15.251434
+min         18.010000
+25%         28.447000
+50%         40.063000
+75%         56.131500
+max         84.800000
+Name: donor_age, dtype: float64
+
+hla_match_b_low statistics:
+count    26235.000000
+mean         1.719916
+std          0.454449
+min          0.000000
+25%          1.000000
+50%          2.000000
+75%          2.000000
+max          2.000000
+Name: hla_match_b_low, dtype: float64
+
+age_at_hct statistics:
+count    28800.000000
+mean        38.663162
+std         21.147581
+min          0.044000
+25%         19.539000
+50%         41.006000
+75%         55.965250
+max         73.726000
+Name: age_at_hct, dtype: float64
+
+hla_match_a_low statistics:
+count    26410.000000
+mean         1.709087
+std          0.458259
+min          0.000000
+25%          1.000000
+50%          2.000000
+75%          2.000000
+max          2.000000
+Name: hla_match_a_low, dtype: float64
+
+hla_match_b_high statistics:
+count    24712.00000
+mean         1.69962
+std          0.46518
+min          0.00000
+25%          1.00000
+50%          2.00000
+75%          2.00000
+max          2.00000
+Name: hla_match_b_high, dtype: float64
+
+comorbidity_score statistics:
+count    28323.000000
+mean         1.702327
+std          1.994443
+min          0.000000
+25%          0.000000
+50%          1.000000
+75%          2.000000
+max         10.000000
+Name: comorbidity_score, dtype: float64
+
+karnofsky_score statistics:
+count    27930.00000
+mean        83.83208
+std         11.02884
+min         40.00000
+25%         70.00000
+50%         90.00000
+75%         90.00000
+max        100.00000
+Name: karnofsky_score, dtype: float64
+
+hla_low_res_8 statistics:
+count    25147.000000
+mean         6.903448
+std          1.565017
+min          2.000000
+25%          6.000000
+50%          8.000000
+75%          8.000000
+max          8.000000
+Name: hla_low_res_8, dtype: float64
+
+hla_match_drb1_high statistics:
+count    25448.000000
+mean         1.707128
+std          0.461179
+min          0.000000
+25%          1.000000
+50%          2.000000
+75%          2.000000
+max          2.000000
+Name: hla_match_drb1_high, dtype: float64
+
+hla_low_res_10 statistics:
+count    23736.000000
+mean         8.664687
+std          1.882746
+min          4.000000
+25%          7.000000
+50%         10.000000
+75%         10.000000
+max         10.000000
+Name: hla_low_res_10, dtype: float64
+
+================================================================================
+SURVIVAL ANALYSIS TRANSFORMATIONS
+================================================================================
+
+Kaplan-Meier transformation statistics:
+Mean: 0.606189
+Std Dev: 0.176710
+Min: 0.452727
+Max: 0.999965
+
+Nelson-Aalen transformation statistics:
+Mean: -0.539331
+Std Dev: 0.272041
+Min: -0.792423
+Max: -0.000035
+
+Kaplan-Meier by event status:
+event=1 - Mean: 0.499903, Std: 0.288666, Min: 0.000000, Max: 0.999936
+event=0 - Mean: 1.000000, Std: 0.000000, Min: 1.000000, Max: 1.000000
+
+Nelson-Aalen by event status:
+event=1 - Mean: -1.000163, Std: 0.999704, Min: -10.227906, Max: -0.000064
+event=0 - Mean: 0.000000, Std: 0.000000, Min: -0.000000, Max: -0.000000
+
+================================================================================
+MODEL TYPES ANALYSIS
+================================================================================
+
+Model types used in the competition:
+- xgb_kmrace: XGBoost with Kaplan-Meier target by race
+- lgb_kmrace: LightGBM with Kaplan-Meier target by race
+- xgb_na: XGBoost with Nelson-Aalen target
+- cb_kmrace: CatBoost with Kaplan-Meier target by race
+- cb_na: CatBoost with Nelson-Aalen target
+- lgb_na: LightGBM with Nelson-Aalen target
+- xgb_cox: XGBoost with Cox proportional hazards target
+- cb_cox: CatBoost with Cox proportional hazards target
+
+================================================================================
+FEATURE RELATIONSHIPS
+================================================================================
+
+Correlation between age_at_hct and donor_age: 0.1455
+
+Relationship between hla, tce_match and tce_div_match:
+
+hla_match_c_high: 3 unique values
+hla_match_c_high
+2.0    18565
+1.0     5536
+0.0       79
+Name: count, dtype: int64
+
+hla_high_res_8: 7 unique values
+hla_high_res_8
+8.0    13568
+4.0     3820
+7.0     2385
+5.0     1648
+6.0     1520
+3.0       28
+2.0        2
+Name: count, dtype: int64
+
+hla_low_res_6: 5 unique values
+hla_low_res_6
+6.0    15690
+3.0     4955
+5.0     2808
+4.0     2055
+2.0       22
+Name: count, dtype: int64
+
+hla_high_res_6: 6 unique values
+hla_high_res_6
+6.0    14022
+3.0     4596
+5.0     2726
+4.0     2128
+2.0       43
+0.0        1
+Name: count, dtype: int64
+
+hla_high_res_10: 8 unique values
+hla_high_res_10
+10.0    12232
+5.0      3161
+9.0      2369
+6.0      1355
+8.0      1314
+7.0      1180
+4.0        25
+3.0         1
+Name: count, dtype: int64
+
+hla_match_dqb1_high: 3 unique values
+hla_match_dqb1_high
+2.0    17468
+1.0     6056
+0.0       77
+Name: count, dtype: int64
+
+hla_nmdp_6: 5 unique values
+hla_nmdp_6
+6.0    15105
+3.0     4888
+5.0     3296
+4.0     1279
+2.0       35
+Name: count, dtype: int64
+
+hla_match_c_low: 3 unique values
+hla_match_c_low
+2.0    19782
+1.0     6139
+0.0       79
+Name: count, dtype: int64
+
+hla_match_drb1_low: 2 unique values
+hla_match_drb1_low
+2.0    18710
+1.0     7447
+Name: count, dtype: int64
+
+hla_match_dqb1_low: 3 unique values
+hla_match_dqb1_low
+2.0    19131
+1.0     5384
+0.0       91
+Name: count, dtype: int64
+
+hla_match_a_high: 3 unique values
+hla_match_a_high
+2.0    17304
+1.0     7132
+0.0       63
+Name: count, dtype: int64
+
+hla_match_b_low: 3 unique values
+hla_match_b_low
+2.0    18951
+1.0     7220
+0.0       64
+Name: count, dtype: int64
+
+hla_match_a_low: 3 unique values
+hla_match_a_low
+2.0    18776
+1.0     7585
+0.0       49
+Name: count, dtype: int64
+
+hla_match_b_high: 3 unique values
+hla_match_b_high
+2.0    17366
+1.0     7269
+0.0       77
+Name: count, dtype: int64
+
+hla_low_res_8: 7 unique values
+hla_low_res_8
+8.0    15160
+4.0     4259
+7.0     2603
+5.0     1613
+6.0     1488
+3.0       23
+2.0        1
+Name: count, dtype: int64
+
+hla_match_drb1_high: 3 unique values
+hla_match_drb1_high
+2.0    18066
+1.0     7311
+0.0       71
+Name: count, dtype: int64
+
+hla_low_res_10: 7 unique values
+hla_low_res_10
+10.0    13734
+5.0      3211
+9.0      2544
+6.0      1664
+8.0      1387
+7.0      1170
+4.0        26
+Name: count, dtype: int64
+
+TCE match types distribution:
+
+tce_match:
+tce_match
+Permissive            6272
+GvH non-permissive    1605
+Fully matched         1059
+HvG non-permissive     868
+Name: count, dtype: int64
+
+tce_div_match:
+tce_div_match
+Permissive mismatched            12936
+GvH non-permissive                2458
+HvG non-permissive                1417
+Bi-directional non-permissive      593
+Name: count, dtype: int64
+
+Relationship between disease features:
+
+dri_score value counts:
+dri_score
+Intermediate                                         10436
+N/A - pediatric                                       4779
+High                                                  4701
+N/A - non-malignant indication                        2427
+TBD cytogenetics                                      2003
+Low                                                   1926
+High - TED AML case <missing cytogenetics             1414
+Intermediate - TED AML case <missing cytogenetics      481
+N/A - disease not classifiable                         272
+Very high                                              198
+Missing disease status                                   9
+Name: count, dtype: int64
+
+================================================================================
+AGE-RELATED FEATURES ANALYSIS
+================================================================================
+
+Bins of age_at_hct:
+age_group
+0-10     4143
+11-20    3140
+21-30    1435
+31-40    5164
+41-50    3755
+51-60    5433
+61-70    5608
+71-80     122
+Name: count, dtype: int64
+
+Event rate by age group:
+age_group
+0-10     0.302438
+11-20    0.423567
+21-30    0.523345
+31-40    0.559450
+41-50    0.602663
+51-60    0.609240
+61-70    0.650678
+71-80    0.713115
+Name: efs, dtype: float64
+
+Median survival time by age group:
+age_group
+0-10     26.3300
+11-20    20.4670
+21-30    10.1880
+31-40     9.5865
+41-50     8.5890
+51-60     8.0270
+61-70     7.1230
+71-80     6.5465
+Name: efs_time, dtype: float64
+
+================================================================================
+SUMMARY OF KEY FINDINGS
+================================================================================
+
+1. Dataset Structure:
+   - Train set has 28800 rows and 61 columns
+   - 25 numerical features and 35 categorical features
+   - Event rate: 0.5393
+
+2. Missing Values:
+   - 50 columns have missing values
+   - Top column with missing values: arrhythmia (7.65%)
+
+3. Race Distribution:
+   - Number of race groups: 6
+   - Most common race: More than one race (4845 patients, 16.82%)
+   - Least common race: Native Hawaiian or other Pacific Islander (4707 patients, 16.34%)
+
+4. Target Transformations:
+   - The competition uses several target transformations:
+     * Kaplan-Meier survival probability
+     * Nelson-Aalen cumulative hazard
+     * Cox proportional hazards
+     * Custom KM by race group
+
+5. Model Types:
+   - Tree-based models (XGBoost, LightGBM, CatBoost)
+   - Multiple target transformations for each model type
+   - Ensemble of different model types and targets
+
+================================================================================
+END OF ANALYSIS
+================================================================================
