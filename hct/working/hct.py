@@ -1,84 +1,152 @@
-from typing import Dict, List, Tuple
+import warnings
 
-import pandas as pd
+warnings.simplefilter("ignore")
+import os
+import sys
+import csv
+import shutil
+import contextlib
+from glob import glob
+from functools import cache
+from collections import defaultdict
+from itertools import combinations, starmap
 import numpy as np
+import pandas as pd
+import xgboost as xgb
+import catboost as cb
+import lightgbm as lgb
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import rankdata
+from sklearn.model_selection import KFold
+from lifelines import KaplanMeierFitter, NelsonAalenFitter
+from lifelines.utils import concordance_index
+import joblib
+from conduit.duct import Duct
 
-from duct import Competition, Pipeline
-from survival import KMFTransformer, NAFTransformer
 
-
-class HCTCompetition(Competition):
-    """CIBMTR competition implementation"""
-
-    def __init__(self):
-        super().__init__("hct", "../input/equity-post-HCT-survival-predictions")
-
-    def read_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Read and preprocess train/test data"""
-        train = self.read_csv("train.csv").set_index("ID")
-        test = self.read_csv("test.csv").set_index("ID")
-        train.index = train.index.astype("int32")
-        test.index = test.index.astype("int32")
-        return train, test
-
-    def identify_feature_types(self, df: pd.DataFrame) -> Dict[str, List[str]]:
-        """Identify categorical and numerical features"""
-        RMV = ["ID", "efs", "efs_time", "y"]
-        all_features = [c for c in df.columns if c not in RMV]
-        cats = [c for c in all_features if c not in ["age_at_hct", "donor_age"]]
-        nums = ["age_at_hct", "donor_age"]
-        return {"all": all_features, "categorical": cats, "numerical": nums}
-
-    def prepare_features(
-        self, train_df: pd.DataFrame, test_df: pd.DataFrame
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Prepare features for both train and test sets"""
-        df = pd.concat([train_df, test_df])
-
-        # Handle outliers
-        df["year_hct"] = df["year_hct"].replace(2020, 2019)
-        df["karnofsky_score"] = df["karnofsky_score"].replace(40, 50)
-        df["hla_high_res_8"] = df["hla_high_res_8"].replace(2, 3)
-        df["hla_high_res_6"] = df["hla_high_res_6"].replace(0, 2)
-        df["hla_high_res_10"] = df["hla_high_res_10"].replace(3, 4)
-        df["hla_low_res_8"] = df["hla_low_res_8"].replace(2, 3)
-
-        # Feature engineering
-        df["nan_value_each_row"] = df.isnull().sum(axis=1)
-        df["age_group"] = df["age_at_hct"] // 10
-        df["donor_age-age_at_hct"] = df["donor_age"] - df["age_at_hct"]
-        df["comorbidity_score+karnofsky_score"] = (
-            df["comorbidity_score"] + df["karnofsky_score"]
+class Hct:
+    def __init__(
+        self,
+        name,
+        pipes,
+        submit_full_ensemble=False,
+        include_fit_on_kaggle=False,
+    ):
+        self.name = name
+        self.duct = Duct(
+            name,
+            pipes,
+            "ID",
+            ["efs", "efs_time"],
+            calc_score=self.calc_score,
+            submit_full_ensemble=submit_full_ensemble,
+            include_fit_on_kaggle=include_fit_on_kaggle,
+            data_dir="equity-post-HCT-survival-predictions",
+            lb_dir="hct-leaderboard",
+            custom_get_y=self.get_y,
         )
-        df["comorbidity_score-karnofsky_score"] = (
-            df["comorbidity_score"] - df["karnofsky_score"]
+        self.running_on_kaggle = self.duct.running_on_kaggle
+        self.train = self.duct.train
+
+    def plot_y_transformation(self, Y_name, Y):
+        """Visualization function for target transformations"""
+        if self.running_on_kaggle:
+            fig, axes = plt.subplots(2, 2, figsize=(6, 4), sharey=True)
+            plt.subplots_adjust(hspace=0.3)
+            fig.suptitle(f"Y transformation: {Y_name}", fontsize="medium")
+            sns.histplot(Y, y="y", hue="efs", ax=axes[0, 0])
+            sns.scatterplot(Y, x="efs_time", y="y", hue="efs", ax=axes[0, 1])
+            sns.scatterplot(
+                Y[Y["efs"] == 0], x="efs_time", y="y", label="efs=0", ax=axes[1, 0]
+            )
+            axes[1, 0].legend()
+            sns.scatterplot(
+                Y[Y["efs"] == 1],
+                x="efs_time",
+                y="y",
+                label="efs=1",
+                color=sns.color_palette()[1],
+                ax=axes[1, 1],
+            )
+            axes[1, 1].legend()
+            plt.tight_layout()
+            plt.show()
+
+    @cache
+    def get_y(self, encoding_type):
+        """Target transformation function with caching"""
+        # Different survival analysis transformations
+        if encoding_type == "nach":
+            naf = NelsonAalenFitter(label="y")
+            naf.fit(self.train["efs_time"], event_observed=self.train["efs"])
+            Y = self.train[["efs", "efs_time"]].join(
+                -naf.cumulative_hazard_, on="efs_time"
+            )
+            title = "Nelson Aalen cumulative hazard"
+
+        elif encoding_type == "km":
+            km = KaplanMeierFitter(label="y")
+            km.fit(self.train["efs_time"], event_observed=self.train["efs"])
+            Y = self.train[["efs", "efs_time"]].join(
+                km.survival_function_, on="efs_time"
+            )
+            title = "Kaplan Meier survival"
+
+        elif encoding_type == "cox":
+            Y = self.train[["efs", "efs_time"]]
+            Y["y"] = self.train["efs_time"]
+            Y.loc[Y["efs"] == 0, "y"] *= -1
+            title = "XGB survival:cox, LGBM Cox"
+
+        elif encoding_type == "kmrace":
+            Y = self.train[["efs", "efs_time", "race_group"]].copy()
+            Y["y"] = 0
+            for race in Y["race_group"].unique():
+                mask = Y["race_group"] == race
+                kmf = KaplanMeierFitter()
+                kmf.fit(Y.loc[mask, "efs_time"], Y.loc[mask, "efs"])
+                Y.loc[mask, "y"] = kmf.survival_function_at_times(
+                    Y.loc[mask, "efs_time"]
+                ).values
+                gap = (
+                    0.7
+                    * (
+                        Y.loc[(mask) & (Y["efs"] == 0), "y"].max()
+                        - Y.loc[(mask) & (Y["efs"] == 1), "y"].min()
+                    )
+                    / 2
+                )
+                Y.loc[(mask) & (Y["efs"] == 0), "y"] -= gap
+            title = "Kaplan Meier survival by race"
+
+        else:
+            raise
+
+        self.plot_y_transformation(title, Y)
+        return Y["y"]
+
+    def calc_score(self, y_pred_oof):
+        """Calculate competition metric"""
+        merged_df = self.train[["race_group", "efs_time", "efs"]].assign(
+            prediction=y_pred_oof
         )
-        df["comorbidity_score*karnofsky_score"] = (
-            df["comorbidity_score"] * df["karnofsky_score"]
-        )
-        df["comorbidity_score/karnofsky_score"] = (
-            df["comorbidity_score"] / df["karnofsky_score"]
-        )
+        merged_df = merged_df.reset_index()
+        merged_df_race_dict = dict(merged_df.groupby(["race_group"]).groups)
+        metric_list = []
 
-        # Handle categorical features
-        df["dri_score"] = df["dri_score"].replace(
-            "Missing disease status", "N/A - disease not classifiable"
-        )
-        df["dri_score_NA"] = df["dri_score"].apply(lambda x: int("N/A" in str(x)))
-        for col in ["diabetes", "pulm_moderate", "cardiac"]:
-            df.loc[df[col].isna(), col] = "Not done"
+        # Calculate concordance index for each race group
+        for race in merged_df_race_dict.keys():
+            indices = sorted(merged_df_race_dict[race])
+            merged_df_race = merged_df.iloc[indices]
 
-        # Split back into train and test
-        train = df[: len(train_df)].copy()
-        test = df[len(train_df) :].reset_index(drop=True).copy()
+            c_index_race = concordance_index(
+                merged_df_race["efs_time"],
+                -merged_df_race["prediction"],
+                merged_df_race["efs"],
+            )
 
-        return train, test
+            metric_list.append(c_index_race)
 
-    @staticmethod
-    def get_categorical_features(df: pd.DataFrame) -> List[str]:
-        """Identify categorical features"""
-        return [c for c in df.columns if df[c].nunique() < 100]
-
-    def transform_target(self, df: pd.DataFrame) -> pd.Series:
-        """Competition-specific target transformation"""
-        pass
+        # Return mean - std to encourage consistent performance across groups
+        return float(np.mean(metric_list) - np.sqrt(np.var(metric_list)))
