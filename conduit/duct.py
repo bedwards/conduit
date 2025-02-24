@@ -56,6 +56,7 @@ class Duct:
         self.target_cols = target_cols
         self.calc_score = calc_score
         self.submit_full_ensemble = submit_full_ensemble
+        self.include_fit_on_kaggle = include_fit_on_kaggle
         self.custom_get_y = custom_get_y
         self.data_path = f"../input/{data_dir}"
         self.lb_path = f"../input/{lb_dir}"
@@ -241,7 +242,7 @@ class Duct:
                 values = lambda: (
                     float(row["score"]),
                     float(row["leaderboard_percentile"]),
-                    row["models"].split("-"),
+                    row["models"].split(", "),
                 )
 
                 if not self.submit_full_ensemble:
