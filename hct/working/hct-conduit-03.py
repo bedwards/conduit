@@ -26,7 +26,7 @@ from lifelines import KaplanMeierFitter, NelsonAalenFitter
 from lifelines.utils import concordance_index
 import joblib
 from conduit.hct import Hct
-import conduit.duct
+import conduit.duct as duct
 
 
 PIPES = {

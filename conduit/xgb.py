@@ -33,9 +33,6 @@ class XgbSurvivalCox(XgbBase):
             objective="survival:cox", eval_metric="cox-nloglik", **self.kwargs
         )
 
-        if pipe["m"] == "lgb":
-            pipe["kwargs"] = dict(device="gpu", **pipe["kwargs"])
-
 
 def xgb_factory(y_name):
     return XgbSurvivalCox if y_name == "cox" else XgbRegSquaredError
