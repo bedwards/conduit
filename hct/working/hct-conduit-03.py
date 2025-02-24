@@ -20,20 +20,35 @@ from conduit.hct import Hct
 import conduit.duct as duct
 
 PIPES = {
-    "xgb_kmrace": {
+    "xgb_narace": {
         "m": "xgb",
         "X": "label",
-        "y": "kmrace",
+        "y": "narace",
     },
-    "lgb_kmrace": {
-        "m": "lgb",
+    "cb_narace": {
+        "m": "cb",
         "X": "label",
-        "y": "kmrace",
+        "y": "narace",
     },
+    "lgb_narace": {
+        "m": "cb",
+        "X": "label",
+        "y": "narace",
+    },
+    # "xgb_kmrace": {
+    #     "m": "xgb",
+    #     "X": "label",
+    #     "y": "kmrace",
+    # },
+    # "lgb_kmrace": {
+    #     "m": "lgb",
+    #     "X": "label",
+    #     "y": "kmrace",
+    # },
     "xgb_na": {
         "m": "xgb",
         "X": "label",
-        "y": "nach",
+        "y": "na",
     },
     "cb_kmrace": {
         "m": "cb",
@@ -43,23 +58,23 @@ PIPES = {
     "cb_na": {
         "m": "cb",
         "X": "label",
-        "y": "nach",
+        "y": "na",
     },
-    "lgb_na": {
-        "m": "lgb",
-        "X": "label",
-        "y": "nach",
-    },
+    # "lgb_na": {
+    #     "m": "lgb",
+    #     "X": "label",
+    #     "y": "narace",
+    # },
     "xgb_cox": {
         "m": "xgb",
         "X": "label",
         "y": "cox",
     },
-    "cb_cox": {
-        "m": "cb",
-        "X": "label",
-        "y": "cox",
-    },
+    # "cb_cox": {
+    #     "m": "cb",
+    #     "X": "label",
+    #     "y": "cox",
+    # },
 }
 
 if __name__ == "__main__":
@@ -67,7 +82,7 @@ if __name__ == "__main__":
     if not running_on_kaggle and sys.argv[1:]:
         if sys.argv[1] in PIPES:
             PIPES = {sys.argv[1]: PIPES[sys.argv[1]]}
-        if sys.argv[1] not in ["cv_score", "predict"]:
+        if sys.argv[1] not in ["cv_score", "predict", "clean"]:
             raise
 
     hct = Hct(
@@ -84,11 +99,12 @@ if __name__ == "__main__":
             duct.predict()
             sys.exit()
 
-        for fn in glob(f"{duct.csv_path}/*.csv"):
-            os.remove(fn)
+        if sys.argv[1:] and sys.argv[1] == "clean":
+            for fn in glob(f"{duct.csv_path}/*.csv"):
+                os.remove(fn)
 
-        for fn in glob(f"{duct.model_path}/*.joblib"):
-            os.remove(fn)
+            for fn in glob(f"{duct.model_path}/*.joblib"):
+                os.remove(fn)
 
         duct.fit()
         duct.cv_score()

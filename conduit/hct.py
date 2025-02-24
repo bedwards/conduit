@@ -108,6 +108,27 @@ class Hct:
                 Y.loc[(mask) & (Y["efs"] == 0), "y"] -= gap
             title = "Kaplan Meier survival by race"
 
+        elif encoding_type == "narace":
+            Y = self.train[["efs", "efs_time", "race_group"]].copy()
+            Y["y"] = 0
+            for race in Y["race_group"].unique():
+                mask = Y["race_group"] == race
+                naf = NelsonAalenFitter()
+                naf.fit(Y.loc[mask, "efs_time"], Y.loc[mask, "efs"])
+                Y.loc[mask, "y"] = -naf.cumulative_hazard_at_times(
+                    Y.loc[mask, "efs_time"]
+                ).values
+                gap = (
+                    0.7
+                    * (
+                        Y.loc[(mask) & (Y["efs"] == 0), "y"].max()
+                        - Y.loc[(mask) & (Y["efs"] == 1), "y"].min()
+                    )
+                    / 2
+                )
+                Y.loc[(mask) & (Y["efs"] == 0), "y"] -= gap
+            title = "Nelson Aalen cumulative hazard by race"
+
         else:
             raise
 
