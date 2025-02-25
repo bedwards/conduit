@@ -45,20 +45,20 @@ PIPES = {
     #     "X": "label",
     #     "y": "kmrace",
     # },
-    "xgb_na": {
+    "xgb_nach": {
         "m": "xgb",
         "X": "label",
-        "y": "na",
+        "y": "nach",
     },
     "cb_kmrace": {
         "m": "cb",
         "X": "label",
         "y": "kmrace",
     },
-    "cb_na": {
+    "cb_nach": {
         "m": "cb",
         "X": "label",
-        "y": "na",
+        "y": "nach",
     },
     # "lgb_na": {
     #     "m": "lgb",

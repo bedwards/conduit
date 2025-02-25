@@ -130,7 +130,7 @@ class Hct:
             title = "Nelson Aalen cumulative hazard by race"
 
         else:
-            raise
+            raise ValueError(encoding_type)
 
         self.plot_y_transformation(title, Y)
         return Y["y"]
