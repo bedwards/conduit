@@ -32,21 +32,17 @@ class Duct:
         pipes,
         id_col,
         target_cols,
-        calc_score,
         submit_full_ensemble,
         include_fit_on_kaggle,
         data_dir,
         lb_dir,
-        custom_get_y=None,
     ):
         self.name = name
         self.pipes = pipes
         self.id_col = id_col
         self.target_cols = target_cols
-        self.calc_score = calc_score
         self.submit_full_ensemble = submit_full_ensemble
         self.include_fit_on_kaggle = include_fit_on_kaggle
-        self.custom_get_y = custom_get_y
         self.data_path = f"../input/{data_dir}"
         self.lb_path = f"../input/{lb_dir}"
         self.csv_path = f"./csv/{name}"
@@ -74,15 +70,11 @@ class Duct:
         print(f"read {path} {df.shape}")
         return df
 
-    @cache
-    def get_y(self, encoding_type=None):
-        if self.custom_get_y:
-            return self.custom_get_y(encoding_type)
-
+    def get_y(self, encoding_type, X_train, i_fold):
         if len(target_cols) > 1:
             raise
 
-        return self.train[self.target_cols]
+        return self.train[self.target_cols[0]]
 
     @cache
     def get_X(self, train_or_test, encoding_type):
@@ -108,7 +100,22 @@ class Duct:
             raise
 
         X = pd.concat([Xf, Xo], axis=1)
-        assert len(set(self.test.columns) - set(X.columns)) == 0
+
+        if encoding_type != "onehot":
+            diff = set(self.test.columns) - set(X.columns)
+            if len(diff) != 0:
+                print(
+                    "\n\n",
+                    train_or_test,
+                    encoding_type,
+                    "\n",
+                    set(Xf.columns),
+                    "\n\n",
+                    set(Xo.columns),
+                    "\n\n",
+                    diff,
+                )
+                raise
 
         if train_or_test == "train":
             return X[: len(self.train)]
@@ -121,11 +128,13 @@ class Duct:
     def fit_fold_model(self, p_name, pipe, fold_n, i_fold, i_oof):
         m_name, X_name, y_name = [pipe.get(k) for k in ["m", "X", "y"]]
         X = self.get_X("train", X_name)
-        y = self.get_y(y_name)
+        y = self.get_y(y_name, X, i_fold)
         cat_features = X.select_dtypes("category").columns.to_list()
 
         if m_name == "xgb":
-            factory = xgb_factory(y_name)()
+            factory = xgb_factory(enable_categorical=False, y_name=y_name)()
+        if m_name == "xgbcat":
+            factory = xgb_factory(enable_categorical=True, y_name=y_name)()
         elif m_name == "cb":
             factory = cb_factory(y_name)(cat_features=cat_features)
         elif m_name == "lgb":
@@ -173,6 +182,9 @@ class Duct:
                 min(os.cpu_count(), self.kfold.get_n_splits() * len(args))
             ) as pool:
                 pool.starmap(self.fit_fold_model, args)
+
+    def calc_score(self, y_pred_oof):
+        raise NotImplementedError
 
     def cv_score(self):
         print("\nCV score")

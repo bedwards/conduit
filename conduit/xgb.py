@@ -10,7 +10,6 @@ class XgbBase:
             n_estimators=2000,
             learning_rate=0.02,
             min_child_weight=80,
-            enable_categorical=True,
             verbosity=0,
         )
         self.fit_kwargs = dict(verbose=False)
@@ -21,12 +20,12 @@ class XgbBase:
         return XGBRegressor(**self.kwargs)
 
 
-class XgbRegSquaredError(XgbBase):
+class XgbSquaredError(XgbBase):
     # objective="reg:squarederror"
     pass
 
 
-class XgbSurvivalCox(XgbBase):
+class XgbCoxBase(XgbBase):
     def __init__(self):
         super().__init__()
         self.kwargs = dict(
@@ -34,8 +33,32 @@ class XgbSurvivalCox(XgbBase):
         )
 
 
-def xgb_factory(y_name):
-    return XgbSurvivalCox if y_name == "cox" else XgbRegSquaredError
+class XgbCoxSquaredError(XgbCoxBase):
+    def __init__(self):
+        super().__init__()
+
+
+class XgbCatBase(XgbBase):
+    def __init__(self):
+        super().__init__()
+        self.kwargs = dict(enable_categorical=True, **self.kwargs)
+
+
+class XgbCatSquaredError(XgbCatBase):
+    # objective="reg:squarederror"
+    pass
+
+
+class XgbCatSurvivalCox(XgbCatBase, XgbCoxBase):
+    def __init__(self):
+        XgbCatBase.__init__(self)
+        XgbCoxBase.__init__(self)
+
+
+def xgb_factory(enable_categorical, y_name):
+    if enable_categorical:
+        return XgbCatSurvivalCox if y_name == "cox" else XgbCatSquaredError
+    return XgbSurvivalCox if y_name == "cox" else XgbSquaredError
 
 
 # https://xgboost.readthedocs.io/en/stable/parameter.html

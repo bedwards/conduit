@@ -6,14 +6,14 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import KFold
-from lifelines import KaplanMeierFitter, NelsonAalenFitter
+from sklearn.preprocessing import StandardScaler
+from lifelines import CoxPHFitter, KaplanMeierFitter, NelsonAalenFitter
 from lifelines.utils import concordance_index
 from functools import cache
 from conduit.duct import Duct
 
 
-class Hct:
+class Hct(Duct):
     def __init__(
         self,
         name,
@@ -21,21 +21,16 @@ class Hct:
         submit_full_ensemble=False,
         include_fit_on_kaggle=False,
     ):
-        self.name = name
-        self.duct = Duct(
+        super().__init__(
             name,
             pipes,
-            "ID",
-            ["efs", "efs_time"],
-            calc_score=self.calc_score,
+            id_col="ID",
+            target_cols=["efs", "efs_time"],
             submit_full_ensemble=submit_full_ensemble,
             include_fit_on_kaggle=include_fit_on_kaggle,
             data_dir="equity-post-HCT-survival-predictions",
             lb_dir="hct-leaderboard",
-            custom_get_y=self.get_y,
         )
-        self.running_on_kaggle = self.duct.running_on_kaggle
-        self.train = self.duct.train
 
     def plot_y_transformation(self, Y_name, Y):
         """Visualization function for target transformations"""
@@ -61,8 +56,7 @@ class Hct:
             plt.tight_layout()
             plt.show()
 
-    @cache
-    def get_y(self, encoding_type):
+    def get_y(self, encoding_type, X_train, i_fold):
         """Target transformation function with caching"""
         # Different survival analysis transformations
         if encoding_type == "nach":
@@ -80,6 +74,23 @@ class Hct:
                 km.survival_function_, on="efs_time"
             )
             title = "Kaplan Meier survival"
+
+        elif encoding_type == "coxph":
+            Xf = X_train.select_dtypes(["int", "float"]).astype("float32")
+            X = pd.concat(
+                [Xf.fillna(Xf.median()), X_train.select_dtypes("category")], axis=1
+            )
+            Y = self.train[["efs", "efs_time"]]
+            # X_fold = X.iloc[i_fold]
+            # Y_fold = Y.iloc[i_fold]
+            f = CoxPHFitter(penalizer=0.1)
+            f.fit(pd.concat([X, Y], axis=1), "efs_time", "efs")
+            Y["y"] = f.predict_partial_hazard(X)
+            Y["y"] = np.log(Y["y"])
+            Y["y"] = (
+                StandardScaler().fit_transform(Y["y"].values.reshape(-1, 1)).flatten()
+            )
+            title = "Cox partial hazard (CoxPH)"
 
         elif encoding_type == "cox":
             Y = self.train[["efs", "efs_time"]]
