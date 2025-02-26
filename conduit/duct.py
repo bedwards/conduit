@@ -170,7 +170,9 @@ class Duct:
 
         for fold_n, (i_fold, i_oof) in enumerate(self.kfold.split(self.train)):
             for p_name, pipe in self.pipes.items():
-                if not glob(f"{self.model_path}/{self.name}-{p_name}-*.joblib"):
+                if len(self.pipes) == 1 or not glob(
+                    f"{self.model_path}/{self.name}-{p_name}-*.joblib"
+                ):
                     args.append((p_name, pipe, fold_n, i_fold, i_oof))
 
         if self.running_on_kaggle:

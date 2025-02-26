@@ -3,6 +3,7 @@ from xgboost import XGBRegressor
 
 class XgbBase:
     def __init__(self):
+        self.kwargs = getattr(self, "kwargs", {})
         self.kwargs = dict(
             max_depth=3,
             colsample_bytree=0.5,
@@ -11,6 +12,7 @@ class XgbBase:
             learning_rate=0.02,
             min_child_weight=80,
             verbosity=0,
+            **self.kwargs
         )
         self.fit_kwargs = dict(verbose=False)
 
