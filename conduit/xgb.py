@@ -4,7 +4,7 @@ from xgboost import XGBRegressor
 class XgbBase:
     def __init__(self):
         self.kwargs = getattr(self, "kwargs", {})
-        self.kwargs = dict(
+        self.kwargs.update(
             max_depth=3,
             colsample_bytree=0.5,
             subsample=0.8,
@@ -12,7 +12,6 @@ class XgbBase:
             learning_rate=0.02,
             min_child_weight=80,
             verbosity=0,
-            **self.kwargs
         )
         self.fit_kwargs = dict(verbose=False)
 
@@ -29,20 +28,20 @@ class XgbSquaredError(XgbBase):
 
 class XgbCoxBase(XgbBase):
     def __init__(self):
-        super().__init__()
+        XgbBase.__init__(self)
         self.kwargs = dict(
             objective="survival:cox", eval_metric="cox-nloglik", **self.kwargs
         )
 
 
-class XgbCoxSquaredError(XgbCoxBase):
+class XgbCox(XgbCoxBase):
     def __init__(self):
-        super().__init__()
+        XgbCoxBase.__init__(self)
 
 
 class XgbCatBase(XgbBase):
     def __init__(self):
-        super().__init__()
+        XgbBase.__init__(self)
         self.kwargs = dict(enable_categorical=True, **self.kwargs)
 
 
@@ -51,7 +50,7 @@ class XgbCatSquaredError(XgbCatBase):
     pass
 
 
-class XgbCatSurvivalCox(XgbCatBase, XgbCoxBase):
+class XgbCatCox(XgbCatBase, XgbCoxBase):
     def __init__(self):
         XgbCatBase.__init__(self)
         XgbCoxBase.__init__(self)
@@ -59,8 +58,8 @@ class XgbCatSurvivalCox(XgbCatBase, XgbCoxBase):
 
 def xgb_factory(enable_categorical, y_name):
     if enable_categorical:
-        return XgbCatSurvivalCox if y_name == "cox" else XgbCatSquaredError
-    return XgbSurvivalCox if y_name == "cox" else XgbSquaredError
+        return XgbCatCox if y_name == "cox" else XgbCatSquaredError
+    return XgbCox if y_name == "cox" else XgbSquaredError
 
 
 # https://xgboost.readthedocs.io/en/stable/parameter.html
