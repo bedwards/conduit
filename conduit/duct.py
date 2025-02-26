@@ -209,35 +209,35 @@ class Duct:
             pd.DataFrame(y_pred_oofs[p_name], index=self.train.index).to_csv(oof_fn)
             print(f"wrote {oof_fn}")
 
-        fn = sorted(glob(f"{self.lb_path}/*.csv"))[-1]
-        lb = pd.read_csv(fn)
-        print(f"read {fn}")
-        lb = np.sort(lb["Score"])
+        # fn = sorted(glob(f"{self.lb_path}/*.csv"))[-1]
+        # lb = pd.read_csv(fn)
+        # print(f"read {fn}")
+        # lb = np.sort(lb["Score"])
 
-        def leaderboard_percentile(score):
-            return np.searchsorted(lb, score) / len(lb)
+        # def leaderboard_percentile(score):
+        #     return np.searchsorted(lb, score) / len(lb)
 
-        scores = []
+        # scores = []
 
-        for r in range(1, len(y_pred_oofs) + 1):
-            for m_combo in combinations(y_pred_oofs.items(), r):
-                p_names, ranked_risk_scores = zip(*m_combo)
-                p_names = ", ".join(p_names)
-                score = self.calc_score(sum(ranked_risk_scores))
-                lb_pct = leaderboard_percentile(score)
-                scores.append((score, lb_pct, p_names))
+        # for r in range(1, len(y_pred_oofs) + 1):
+        #     for m_combo in combinations(y_pred_oofs.items(), r):
+        #         p_names, ranked_risk_scores = zip(*m_combo)
+        #         p_names = ", ".join(p_names)
+        #         score = self.calc_score(sum(ranked_risk_scores))
+        #         lb_pct = leaderboard_percentile(score)
+        #         scores.append((score, lb_pct, p_names))
 
-        scores = sorted(scores)
-        fn = f"{self.csv_path}/scores.csv"
+        # scores = sorted(scores)
+        # fn = f"{self.csv_path}/scores.csv"
 
-        with open(fn, "w", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(["score", "leaderboard_percentile", "models"])
-            w.writerows(scores)
-            print(f"wrote {fn}")
+        # with open(fn, "w", newline="") as f:
+        #     w = csv.writer(f)
+        #     w.writerow(["score", "leaderboard_percentile", "models"])
+        #     w.writerows(scores)
+        #     print(f"wrote {fn}")
 
-        for score, lb_pct, p_names in scores:
-            print(f"{score:.4f} {lb_pct:.4f} {p_names}")
+        # for score, lb_pct, p_names in scores:
+        #     print(f"{score:.4f} {lb_pct:.4f} {p_names}")
 
     def optimize_weights(self):
         """Optimize ensemble weights per race group using Optuna"""
