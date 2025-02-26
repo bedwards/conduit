@@ -343,7 +343,6 @@ class Duct:
             weights_per_race = json.load(f)
 
         # Get test data race groups
-        X_test = self.get_X("test", "label")  # Use label encoding for all models
         test_with_pred = self.test.copy()
 
         # Initialize prediction array
@@ -352,6 +351,7 @@ class Duct:
         # Load and predict with each model
         model_preds = {}
         for p_name, pipe in self.pipes.items():
+            X_test = self.get_X("test", self.pipes[p_name]["X"])
             model_preds[p_name] = np.zeros(len(test_with_pred))
             for fold_n in range(self.kfold.get_n_splits()):
                 fn = f"{self.model_path}/{self.name}-{p_name}-{fold_n}.joblib"
