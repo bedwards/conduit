@@ -82,7 +82,13 @@ if __name__ == "__main__":
     if not running_on_kaggle and sys.argv[1:]:
         if sys.argv[1] in PIPES:
             PIPES = {sys.argv[1]: PIPES[sys.argv[1]]}
-        if sys.argv[1] not in ["cv_score", "predict", "clean"]:
+        if sys.argv[1] not in [
+            "cv_score",
+            "predict",
+            "optimize_weights",
+            "weighted_predict",
+            "clean",
+        ]:
             raise
 
     hct = Hct(
@@ -93,6 +99,14 @@ if __name__ == "__main__":
     if not running_on_kaggle:
         if sys.argv[1:] and sys.argv[1] == "cv_score":
             duct.cv_score()
+            sys.exit()
+
+        if sys.argv[1:] and sys.argv[1] == "optimize_weights":
+            duct.optimize_weights()
+            sys.exit()
+
+        if sys.argv[1:] and sys.argv[1] == "weighted_predict":
+            duct.weighted_predict()
             sys.exit()
 
         if sys.argv[1:] and sys.argv[1] == "predict":
