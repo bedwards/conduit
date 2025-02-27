@@ -9,6 +9,7 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
 from sklearn.model_selection import KFold
 from scipy.stats import rankdata
 from lifelines import NelsonAalenFitter
@@ -68,17 +69,29 @@ def main():
     y_cox = Y_cox["y"]
 
     xgb_kwargs = dict(enable_categorical=True, verbosity=0)
+    xgb_fit_kwargs = dict(verbose=False)
 
     models = {
         "xgb": {
             "m": XGBRegressor(**xgb_kwargs),
             "y": y_nach,
+            "fit": xgb_fit_kwargs,
         },
         "xgb_cox": {
             "m": XGBRegressor(
                 objective="survival:cox", eval_metric="cox-nloglik", **xgb_kwargs
             ),
             "y": y_cox,
+            "fit": xgb_fit_kwargs,
+        },
+        "lgb": {
+            "m": LGBMRegressor(
+                categorical_feature=X.select_dtypes("category").columns.to_list(),
+                verbose=-1,
+                verbosity=-1,
+            ),
+            "y": y_nach,
+            "fit": {},
         },
     }
 
@@ -95,7 +108,7 @@ def main():
                 X.iloc[i_fold],
                 y.iloc[i_fold],
                 eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
-                verbose=False,
+                **m_config["fit"],
             )
             print("predict")
             y_pred_oof_by_m[m_name][i_oof] = m.predict(X.iloc[i_oof])
