@@ -1,0 +1,21 @@
+scores
+
+xgb
+0.6665 American Indian or Alaska Native
+0.6813 Asian
+0.6612 Black or African-American
+0.6582 More than one race
+0.6506 Native Hawaiian or other Pacific Islander
+0.6637 White
+0.6542: mean=0.6636 stddev=0.0093
+
+xgb, xgb_cox
+0.6818 American Indian or Alaska Native
+0.6917 Asian
+0.6706 Black or African-American
+0.6713 More than one race
+0.6607 Native Hawaiian or other Pacific Islander
+0.6703 White
+0.6646: mean=0.6744 stddev=0.0099
+
+xgb, xgb_cox, lgb
