@@ -170,8 +170,8 @@ if __name__ == "__main__":
     # Running on kaggle
     if INCLUDE_FIT_ON_KAGGLE:
         hct.fit()
-    hct.cv_score()
-    hct.optimize_weights()
+        hct.cv_score()
+        hct.optimize_weights()
     hct.weighted_predict()
 
     shutil.rmtree(hct.csv_path)
