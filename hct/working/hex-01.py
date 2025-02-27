@@ -8,20 +8,37 @@ import sys
 from collections import defaultdict
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 from sklearn.model_selection import KFold
 from scipy.stats import rankdata
-from lifelines import NelsonAalenFitter
+from lifelines import KaplanMeierFitter, NelsonAalenFitter
 from lifelines.utils import concordance_index
 
+Y_TRANSFORMATION = {
+    "plot": True,
+    "by_race": True,
+    "gap": 0.35,
+    # kms
+    "name": "kms",
+    "fitter": KaplanMeierFitter,
+    "estimate": "survival_function_",
+    "sign": 1,
+    # nach
+    # "name": "nach",
+    # "fitter": NelsonAalenFitter,
+    # "estimate": "cumulative_hazard_",
+    # "sign": -1,
+}
 
 data_dir = "equity-post-HCT-survival-predictions"
 
-train = pd.read_csv(f"../input/{data_dir}/train.csv").set_index("ID")
+train = pd.read_csv(f"../input/{data_dir}/train.csv").set_index("ID").sort_index()
 train.index = train.index.astype("int32")
 
-test = pd.read_csv(f"../input/{data_dir}/test.csv").set_index("ID")
+test = pd.read_csv(f"../input/{data_dir}/test.csv").set_index("ID").sort_index()
 test.index = test.index.astype("int32")
 
 
@@ -47,6 +64,30 @@ def calc_score(y_pred_oof):
     return score
 
 
+def plot_y_transformation(Y):
+    if not Y_TRANSFORMATION["plot"]:
+        return
+    title = f"{Y_TRANSFORMATION['name']} {'by race' if Y_TRANSFORMATION['by_race'] else ""} {Y_TRANSFORMATION['gap']} gap"
+    fig, axes = plt.subplots(2, 2, figsize=(6, 4), sharey=True)
+    plt.subplots_adjust(hspace=0.3)
+    fig.suptitle(f"Y transformation: {title}", fontsize="medium")
+    sns.histplot(Y, y="y", hue="efs", ax=axes[0, 0])
+    sns.scatterplot(Y, x="efs_time", y="y", hue="efs", ax=axes[0, 1])
+    sns.scatterplot(Y[Y["efs"] == 0], x="efs_time", y="y", label="efs=0", ax=axes[1, 0])
+    axes[1, 0].legend()
+    sns.scatterplot(
+        Y[Y["efs"] == 1],
+        x="efs_time",
+        y="y",
+        label="efs=1",
+        color=sns.color_palette()[1],
+        ax=axes[1, 1],
+    )
+    axes[1, 1].legend()
+    plt.tight_layout()
+    plt.show()
+
+
 def main():
     X = pd.concat([train.drop(columns=["efs", "efs_time"]), test])
     Xf = X.select_dtypes(["int", "float"]).astype("float32")
@@ -57,11 +98,31 @@ def main():
     X = pd.concat([Xf, Xo], axis=1)
     X = X[: len(train)]
 
-    naf = NelsonAalenFitter(label="y")
-    naf.fit(train["efs_time"], event_observed=train["efs"])
-    y_nach = train[["efs", "efs_time"]].join(-naf.cumulative_hazard_, on="efs_time")[
-        "y"
-    ]
+    Y = pd.DataFrame()
+    race_groups = train["race_group"].unique()
+    if not Y_TRANSFORMATION["by_race"]:
+        race_groups = [race_groups]
+    else:
+        race_groups = [[g] for g in race_groups]
+    for race_group in race_groups:
+        f = Y_TRANSFORMATION["fitter"](label="y")
+        Y_race = train.loc[train["race_group"].isin(race_group)]
+        f.fit(Y_race["efs_time"], Y_race["efs"])
+        Y_race = Y_race.join(
+            Y_TRANSFORMATION["sign"] * getattr(f, Y_TRANSFORMATION["estimate"]),
+            on="efs_time",
+        )
+        if Y_TRANSFORMATION["gap"] != 0:
+            gap = Y_TRANSFORMATION["gap"] * (
+                Y_race.loc[train["efs"] == 0, "y"].max()
+                - Y_race.loc[train["efs"] == 1, "y"].min()
+            )
+            print(f"{gap:.4f} {race_group}")
+            Y_race.loc[train["efs"] == 0, "y"] -= gap
+        Y = pd.concat([Y, Y_race])
+    Y = Y.sort_index()
+    y = Y["y"]
+    plot_y_transformation(Y)
 
     Y_cox = train[["efs", "efs_time"]]
     Y_cox["y"] = train["efs_time"]
@@ -74,7 +135,7 @@ def main():
     models = {
         "xgb": {
             "m": XGBRegressor(**xgb_kwargs),
-            "y": y_nach,
+            "y": y,
             "fit": xgb_fit_kwargs,
         },
         "xgb_cox": {
@@ -90,7 +151,7 @@ def main():
                 verbose=-1,
                 verbosity=-1,
             ),
-            "y": y_nach,
+            "y": y,
             "fit": {},
         },
     }

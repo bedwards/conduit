@@ -1,15 +1,98 @@
-scores
+kms by race with 0.35 gap 
+0.6877 American Indian or Alaska Native
+0.6964 Asian
+0.6761 Black or African-American
+0.6794 More than one race
+0.6711 Native Hawaiian or other Pacific Islander
+0.6759 White
+0.6726: mean=0.6811 stddev=0.0085
 
-xgb
-0.6665 American Indian or Alaska Native
-0.6813 Asian
-0.6612 Black or African-American
-0.6582 More than one race
-0.6506 Native Hawaiian or other Pacific Islander
-0.6637 White
-0.6542: mean=0.6636 stddev=0.0093
+kms by race with 0.2 gap
+0.6851 American Indian or Alaska Native
+0.6982 Asian
+0.6756 Black or African-American
+0.6793 More than one race
+0.6706 Native Hawaiian or other Pacific Islander
+0.6767 White
+0.6720: mean=0.6809 stddev=0.0089
 
-xgb, xgb_cox
+kms with 0.2 gap
+0.6873 American Indian or Alaska Native
+0.6973 Asian
+0.6752 Black or African-American
+0.6806 More than one race
+0.6703 Native Hawaiian or other Pacific Islander
+0.6743 White
+0.6717: mean=0.6808 stddev=0.0091
+
+nach
+0.6861 American Indian or Alaska Native
+0.6967 Asian
+0.6764 Black or African-American
+0.6785 More than one race
+0.6688 Native Hawaiian or other Pacific Islander
+0.6756 White
+0.6715: mean=0.6804 stddev=0.0089
+
+
+kms by race with 0.35 gap
+
+nach with gap
+0.6875 American Indian or Alaska Native
+0.6984 Asian
+0.6755 Black or African-American
+0.6800 More than one race
+0.6706 Native Hawaiian or other Pacific Islander
+0.6725 White
+0.6711: mean=0.6808 stddev=0.0096
+
+nach by race with 0.2 gap
+0.6884 American Indian or Alaska Native
+0.6978 Asian
+0.6744 Black or African-American
+0.6777 More than one race
+0.6707 Native Hawaiian or other Pacific Islander
+0.6732 White
+0.6708: mean=0.6804 stddev=0.0096
+
+nach by race with 0 gap
+0.6851 American Indian or Alaska Native
+0.6967 Asian
+0.6741 Black or African-American
+0.6751 More than one race
+0.6695 Native Hawaiian or other Pacific Islander
+0.6757 White
+0.6703: mean=0.6794 stddev=0.0090
+
+---------------------------------------------------------
+kms
+0.6851 American Indian or Alaska Native
+0.6961 Asian
+0.6734 Black or African-American
+0.6788 More than one race
+0.6662 Native Hawaiian or other Pacific Islander
+0.6757 White
+0.6698: mean=0.6792 stddev=0.0094
+
+kms by race with 0.7 gap
+0.6858 American Indian or Alaska Native
+0.6963 Asian
+0.6744 Black or African-American
+0.6790 More than one race
+0.6681 Native Hawaiian or other Pacific Islander
+0.6709 White
+0.6695: mean=0.6791 stddev=0.0096
+
+nach by race with 0.35 gap
+0.6870 American Indian or Alaska Native
+0.6977 Asian
+0.6752 Black or African-American
+0.6739 More than one race
+0.6675 Native Hawaiian or other Pacific Islander
+0.6723 White
+0.6687: mean=0.6789 stddev=0.0103
+
+xgb nach, xgb_cox
 0.6818 American Indian or Alaska Native
 0.6917 Asian
 0.6706 Black or African-American
@@ -18,4 +101,12 @@ xgb, xgb_cox
 0.6703 White
 0.6646: mean=0.6744 stddev=0.0099
 
-xgb, xgb_cox, lgb
+---------------------------------------------------------
+xgb nach
+0.6665 American Indian or Alaska Native
+0.6813 Asian
+0.6612 Black or African-American
+0.6582 More than one race
+0.6506 Native Hawaiian or other Pacific Islander
+0.6637 White
+0.6542: mean=0.6636 stddev=0.0093
