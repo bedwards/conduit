@@ -4,6 +4,7 @@ import warnings
 
 warnings.simplefilter("ignore")
 
+import sys
 from pprint import pprint
 import numpy as np
 import pandas as pd
@@ -45,32 +46,37 @@ def calc_score(y_pred_oof):
     return score
 
 
-X = pd.concat([train.drop(columns=["efs", "efs_time"]), test])
-Xf = X.select_dtypes(["int", "float"]).astype("float32")
-Xo = X.select_dtypes("object").astype("category")
-for col in Xo:
-    Xo[col], _ = Xo[col].factorize(use_na_sentinel=False)
-    Xo[col] = Xo[col].astype("int32").astype("category")
-X = pd.concat([Xf, Xo], axis=1)
-X = X[: len(train)]
+def main():
+    X = pd.concat([train.drop(columns=["efs", "efs_time"]), test])
+    Xf = X.select_dtypes(["int", "float"]).astype("float32")
+    Xo = X.select_dtypes("object").astype("category")
+    for col in Xo:
+        Xo[col], _ = Xo[col].factorize(use_na_sentinel=False)
+        Xo[col] = Xo[col].astype("int32").astype("category")
+    X = pd.concat([Xf, Xo], axis=1)
+    X = X[: len(train)]
 
-naf = NelsonAalenFitter(label="y")
-naf.fit(train["efs_time"], event_observed=train["efs"])
-y = train[["efs", "efs_time"]].join(-naf.cumulative_hazard_, on="efs_time")["y"]
+    naf = NelsonAalenFitter(label="y")
+    naf.fit(train["efs_time"], event_observed=train["efs"])
+    y = train[["efs", "efs_time"]].join(-naf.cumulative_hazard_, on="efs_time")["y"]
 
-kfold = KFold(n_splits=10, shuffle=True, random_state=42)
-m = XGBRegressor(enable_categorical=True, verbosity=0)
-y_pred_oof = np.zeros(len(train))
+    kfold = KFold(n_splits=10, shuffle=True, random_state=42)
+    m = XGBRegressor(enable_categorical=True, verbosity=0)
+    y_pred_oof = np.zeros(len(train))
 
-for fold_n, (i_fold, i_oof) in enumerate(kfold.split(train.index)):
-    print(f"{fold_n}", end=" ", flush=True)
-    m.fit(
-        X.iloc[i_fold],
-        y.iloc[i_fold],
-        eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
-        verbose=False,
-    )
-    y_pred_oof[i_oof] = m.predict(X.iloc[i_oof])
+    for fold_n, (i_fold, i_oof) in enumerate(kfold.split(train.index)):
+        print(f"{fold_n}", end=" ", flush=True)
+        m.fit(
+            X.iloc[i_fold],
+            y.iloc[i_fold],
+            eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
+            verbose=False,
+        )
+        y_pred_oof[i_oof] = m.predict(X.iloc[i_oof])
 
-print()
-calc_score(rankdata(y_pred_oof))
+    print()
+    calc_score(rankdata(y_pred_oof))
+
+
+if __name__ == "__main__":
+    main()
