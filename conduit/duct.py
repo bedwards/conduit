@@ -332,7 +332,12 @@ class Duct:
         print("\nPredicting with race-specific weights")
 
         # Load optimal weights
-        weights_fn = f"{self.csv_path}/{self.name}-optimal-weights.json"
+        if self.running_on_kaggle and not self.include_fit_on_kaggle:
+            weights_path = self.model_path
+        else:
+            weights_path = self.csv_path
+
+        weights_fn = f"{weights_path}/{self.name}-optimal-weights.json"
         if not os.path.exists(weights_fn):
             print(f"Weights file {weights_fn} not found. Run optimize_weights first.")
             return
