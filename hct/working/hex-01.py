@@ -5,7 +5,7 @@ import warnings
 warnings.simplefilter("ignore")
 
 import sys
-from pprint import pprint
+from collections import defaultdict
 import numpy as np
 import pandas as pd
 from xgboost import XGBRegressor
@@ -58,24 +58,50 @@ def main():
 
     naf = NelsonAalenFitter(label="y")
     naf.fit(train["efs_time"], event_observed=train["efs"])
-    y = train[["efs", "efs_time"]].join(-naf.cumulative_hazard_, on="efs_time")["y"]
+    y_nach = train[["efs", "efs_time"]].join(-naf.cumulative_hazard_, on="efs_time")[
+        "y"
+    ]
+
+    Y_cox = train[["efs", "efs_time"]]
+    Y_cox["y"] = train["efs_time"]
+    Y_cox.loc[Y_cox["efs"] == 0, "y"] *= -1
+    y_cox = Y_cox["y"]
+
+    xgb_kwargs = dict(enable_categorical=True, verbosity=0)
+
+    models = {
+        "xgb": {
+            "m": XGBRegressor(**xgb_kwargs),
+            "y": y_nach,
+        },
+        "xgb_cox": {
+            "m": XGBRegressor(
+                objective="survival:cox", eval_metric="cox-nloglik", **xgb_kwargs
+            ),
+            "y": y_cox,
+        },
+    }
 
     kfold = KFold(n_splits=10, shuffle=True, random_state=42)
-    m = XGBRegressor(enable_categorical=True, verbosity=0)
-    y_pred_oof = np.zeros(len(train))
+    y_pred_oof_by_m = defaultdict(lambda: np.zeros(len(train)))
 
     for fold_n, (i_fold, i_oof) in enumerate(kfold.split(train.index)):
-        print(f"{fold_n}", end=" ", flush=True)
-        m.fit(
-            X.iloc[i_fold],
-            y.iloc[i_fold],
-            eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
-            verbose=False,
-        )
-        y_pred_oof[i_oof] = m.predict(X.iloc[i_oof])
+        print(f"fold {fold_n}")
+        for m_name, m_config in models.items():
+            print(f"  {m_name:<7} fit", end=" ", flush=True)
+            m = m_config["m"]
+            y = m_config["y"]
+            m.fit(
+                X.iloc[i_fold],
+                y.iloc[i_fold],
+                eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
+                verbose=False,
+            )
+            print("predict")
+            y_pred_oof_by_m[m_name][i_oof] = m.predict(X.iloc[i_oof])
 
     print()
-    calc_score(rankdata(y_pred_oof))
+    calc_score(sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values()))
 
 
 if __name__ == "__main__":

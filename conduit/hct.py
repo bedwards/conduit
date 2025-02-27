@@ -96,7 +96,7 @@ class Hct(Duct):
             Y = self.train[["efs", "efs_time"]]
             Y["y"] = self.train["efs_time"]
             Y.loc[Y["efs"] == 0, "y"] *= -1
-            title = "XGB survival:cox, LGBM Cox"
+            title = "XGB survival:cox, CatBoost Cox"
 
         elif encoding_type == "kmrace":
             Y = self.train[["efs", "efs_time", "race_group"]].copy()
