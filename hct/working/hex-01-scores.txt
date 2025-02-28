@@ -1,5 +1,21 @@
+0.6725 xgb
+0.6669 xgb_cox
+0.6634 xgb_aft
+0.6677 cb
+0.6604 cb_cox
+0.6576 cb_aft
+0.6713 lgb
+0.6909 American Indian or Alaska Native
+0.6978 Asian
+0.6749 Black or African-American
+0.6860 More than one race
+0.6779 Native Hawaiian or other Pacific Islander
+0.6706 White
+0.6736: mean=0.6830 stddev=0.0094
+
+
 xgb, xgb_cox, cb, cb_cox, lgb
-kms by race with 0.35 gap, StratifiedKFold
+kms by race with 0.35 gap, StratifiedKFold race_group
 0.6911 American Indian or Alaska Native
 0.6999 Asian
 0.6788 Black or African-American
@@ -7,6 +23,22 @@ kms by race with 0.35 gap, StratifiedKFold
 0.6759 Native Hawaiian or other Pacific Islander
 0.6752 White
 0.6757: mean=0.6846 stddev=0.0089
+
+0.6894 American Indian or Alaska Native
+0.6964 Asian
+0.6762 Black or African-American
+0.6848 More than one race
+0.6750 Native Hawaiian or other Pacific Islander
+0.6709 White
+0.6732: mean=0.6821 stddev=0.0089
+
+0.6908 American Indian or Alaska Native
+0.6997 Asian
+0.6785 Black or African-American
+0.6868 More than one race
+0.6758 Native Hawaiian or other Pacific Islander
+0.6749 White
+0.6755: mean=0.6844 stddev=0.0089
 
 xgb, xgb_cox, cb, cb_cox, lgb
 kms by race with 0.35 gap, StratifiedKFold, sample weight

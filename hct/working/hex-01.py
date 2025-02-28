@@ -50,7 +50,7 @@ test = pd.read_csv(f"../input/{data_dir}/test.csv").set_index("ID").sort_index()
 test.index = test.index.astype("int32")
 
 
-def calc_score(y_pred_oof):
+def calc_score(y_pred_oof, debug=False):
     df = train.assign(prediction=y_pred_oof).reset_index()
     indices_by_race = {
         race: sorted(indices)
@@ -62,13 +62,15 @@ def calc_score(y_pred_oof):
         score_by_race[race] = concordance_index(
             df_race["efs_time"], -df_race["prediction"], df_race["efs"]
         )
-    for race, score in score_by_race.items():
-        print(f"{score:.4f} {race}")
+    if debug:
+        for race, score in score_by_race.items():
+            print(f"{score:.4f} {race}")
     scores = list(score_by_race.values())
     scores_mean = np.mean(scores)
     scores_stddev = np.sqrt(np.var(scores))
     score = float(scores_mean - scores_stddev)
-    print(f"{score:.4f}: mean={scores_mean:.4f} stddev={scores_stddev:.4f}")
+    if debug:
+        print(f"{score:.4f}: mean={scores_mean:.4f} stddev={scores_stddev:.4f}")
     return score
 
 
@@ -129,7 +131,7 @@ def preprocess_y_kms_race(debug=False):
         race_groups = [[g] for g in race_groups]
     for race_group in race_groups:
         f = Y_TRANSFORMATION["fitter"](label="y")
-        Y_race = train.loc[train["race_group"].isin(race_group)]
+        Y_race = train[train["race_group"].isin(race_group)]
         f.fit(Y_race["efs_time"], Y_race["efs"])
         Y_race = Y_race.join(
             Y_TRANSFORMATION["sign"] * getattr(f, Y_TRANSFORMATION["estimate"]),
@@ -156,28 +158,52 @@ def preprocess_y_cox():
     return Y_cox["y"]
 
 
-def as_xgb_dmatrix(X):
+def as_xgb_aft(X):
     dmatrix = xgb.DMatrix(X, enable_categorical=True)
     efs_time = train["efs_time"].copy().values
     dmatrix.set_float_info("label_lower_bound", efs_time)
-    label_upper_bound = efs_time
-    label_upper_bound[train["efs"] == 0] = np.inf
-    dmatrix.set_float_info("label_upper_bound", label_upper_bound)
+    y_upper = efs_time
+    y_upper[train["efs"] == 0] = np.inf
+    dmatrix.set_float_info("label_upper_bound", y_upper)
     return dmatrix
+
+
+def as_cb_aft(X, cat_features):
+    y_upper = train["efs_time"].rename("y_upper")
+    y_upper[train["efs"] == 0] = -1
+    label = pd.concat(
+        [
+            train["efs_time"].rename("y_lower"),
+            y_upper,
+        ],
+        axis=1,
+    )
+    pool = cb.Pool(X, label=label, cat_features=cat_features)
+    return pool
 
 
 def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
     print(f"{m_name:<7} {fold_n} fit")
 
-    X, _ = preprocess_X()
+    if train[train["efs_time"] < 0].any().any():
+        raise ValueError("negative efs_time")
+
+    m = m_config["m"]
+    X, cat_features = preprocess_X()
 
     if m_config["y"] == "aft":
-        if not m_name.startswith("xgb"):
-            raise
+        if m_name.startswith("xgb"):
+            X = as_xgb_aft(X)
+            X_oof = X.slice(i_oof)
+            m = m(X.slice(i_fold), evals=[(X_oof, "eval")], **m_config["fit"])
 
-        X = as_xgb_dmatrix(X)
-        X_oof = X.slice(i_oof)
-        m = m_config["m"](X.slice(i_fold), evals=[(X_oof, "eval")], **m_config["fit"])
+        elif m_name.startswith("cb"):
+            X = as_cb_aft(X, cat_features)
+            X_oof = X.slice(i_oof)
+            m.fit(X.slice(i_fold), eval_set=X_oof)
+
+        else:
+            raise ValueError(f"{m_name} does not support aft")
 
     else:
         if m_config["y"] == "kms_race":
@@ -187,7 +213,7 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
             y = preprocess_y_cox()
 
         else:
-            raise
+            raise ValueError(f'unknown y transformation: {m_config["y"]}')
 
         m = m_config["m"]
         X_oof = X.iloc[i_oof]
@@ -200,7 +226,12 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
         )
 
     print(f"{m_name:<7} {fold_n} predict")
-    return m_name, fold_n, m.predict(X_oof)
+    y_pred_oof = m.predict(X_oof, **m_config["predict"])
+
+    if m_config["y"] == "aft":
+        y_pred_oof *= -1
+
+    return m_name, fold_n, y_pred_oof
 
 
 def main():
@@ -222,6 +253,7 @@ def main():
             "m": xgb.XGBRegressor(**xgb_kwargs),
             "y": "kms_race",
             "fit": xgb_fit_kwargs,
+            "predict": {},
         },
         "xgb_cox": {
             "m": xgb.XGBRegressor(
@@ -229,6 +261,7 @@ def main():
             ),
             "y": "cox",
             "fit": xgb_fit_kwargs,
+            "predict": {},
         },
         "xgb_aft": {
             "m": partial(
@@ -246,25 +279,30 @@ def main():
                 num_boost_round=100,
                 verbose_eval=False,
             ),
+            "predict": {},
         },
         "cb": {
             "m": cb.CatBoostRegressor(**cb_kwargs),
             "y": "kms_race",
             "fit": {},
+            "predict": {},
         },
         "cb_cox": {
             "m": cb.CatBoostRegressor(loss_function="Cox", **cb_kwargs),
             "y": "cox",
             "fit": {},
+            "predict": dict(prediction_type="Exponent"),
         },
-        # "cb_aft": {
-        #     "m": cb.CatBoostRegressor(
-        #         loss_function="SurvivalAft:dist=Normal",
-        #         **cb_kwargs,
-        #     ),
-        #     "y": "aft",
-        #     "fit": {},
-        # },
+        "cb_aft": {
+            "m": cb.CatBoostRegressor(
+                loss_function="SurvivalAft:dist=Normal",
+                eval_metric="SurvivalAft",
+                **cb_kwargs,
+            ),
+            "y": "aft",
+            "fit": {},
+            "predict": {},
+        },
         "lgb": {
             "m": lgb.LGBMRegressor(
                 categorical_feature=cat_features,
@@ -273,6 +311,7 @@ def main():
             ),
             "y": "kms_race",
             "fit": {},
+            "predict": {},
         },
     }
 
@@ -295,8 +334,14 @@ def main():
     for m_name, fold_n, y_pred_oof in m_fold_y_pred_oofs:
         y_pred_oof_by_m[m_name][i_oofs[fold_n]] = y_pred_oof
 
+    for m_name in y_pred_oof_by_m.keys():
+        y_pred_oof = rankdata(y_pred_oof_by_m[m_name])
+        score = calc_score(y_pred_oof)
+        print(f"{score:.4f} {m_name}")
+
     print()
-    calc_score(sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values()))
+    y_pred_oof = sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values())
+    calc_score(y_pred_oof, debug=True)
 
     # Note: when predicting test use all models of type, one for each fold
 
