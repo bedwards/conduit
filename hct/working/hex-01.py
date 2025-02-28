@@ -415,7 +415,7 @@ def main():
     for m_name, weight in study.best_params.items():
         print(f"  {weight:.4f} {m_name}")
 
-    with open(BEST_WEIGHTS_FILENAME) as f:
+    with open(BEST_WEIGHTS_FILENAME, "w") as f:
         json.dump(study.best_params, f)
 
     print("\nOptimally-weighted ensemble score")
