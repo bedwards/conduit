@@ -6,15 +6,16 @@ warnings.simplefilter("ignore")
 
 import os
 import sys
-from collections import defaultdict
+from functools import partial
 from multiprocessing import Pool
+from collections import defaultdict
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from xgboost import XGBRegressor
-from catboost import CatBoostRegressor
-from lightgbm import LGBMRegressor
+import xgboost as xgb
+import catboost as cb
+import lightgbm as lgb
 from sklearn.model_selection import KFold, StratifiedKFold
 from scipy.stats import rankdata
 from lifelines import KaplanMeierFitter, NelsonAalenFitter
@@ -155,29 +156,56 @@ def preprocess_y_cox():
     return Y_cox["y"]
 
 
+def as_xgb_dmatrix(X):
+    dmatrix = xgb.DMatrix(X, enable_categorical=True)
+    efs_time = train["efs_time"].copy().values
+    dmatrix.set_float_info("label_lower_bound", efs_time)
+    label_upper_bound = efs_time
+    label_upper_bound[train["efs"] == 0] = np.inf
+    dmatrix.set_float_info("label_upper_bound", label_upper_bound)
+    return dmatrix
+
+
 def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
     print(f"{m_name:<7} {fold_n} fit")
+
     X, _ = preprocess_X()
-    if m_config["y"] == "kms_race":
-        y = preprocess_y_kms_race(m_name == "xgb")
-    elif m_config["y"] == "cox":
-        y = preprocess_y_cox()
+
+    if m_config["y"] == "aft":
+        if not m_name.startswith("xgb"):
+            raise
+
+        X = as_xgb_dmatrix(X)
+        X_oof = X.slice(i_oof)
+        m = m_config["m"](X.slice(i_fold), evals=[(X_oof, "eval")], **m_config["fit"])
+
     else:
-        raise
-    m = m_config["m"]
-    m.fit(
-        X.iloc[i_fold],
-        y.iloc[i_fold],
-        eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
-        **m_config["fit"],
-    )
+        if m_config["y"] == "kms_race":
+            y = preprocess_y_kms_race(m_name == "xgb" and fold_n == 0)
+
+        elif m_config["y"] == "cox":
+            y = preprocess_y_cox()
+
+        else:
+            raise
+
+        m = m_config["m"]
+        X_oof = X.iloc[i_oof]
+
+        m.fit(
+            X.iloc[i_fold],
+            y.iloc[i_fold],
+            eval_set=[(X_oof, y.iloc[i_oof])],
+            **m_config["fit"],
+        )
+
     print(f"{m_name:<7} {fold_n} predict")
-    return m_name, fold_n, m.predict(X.iloc[i_oof])
+    return m_name, fold_n, m.predict(X_oof)
 
 
 def main():
     _, cat_features = preprocess_X(debug=True)
-    xgb_kwargs = dict(enable_categorical=True, verbosity=0)
+    xgb_kwargs = dict(enable_categorical=True, max_depth=3, verbosity=0)
     xgb_fit_kwargs = dict(verbose=False)
     cb_kwargs = dict(
         iterations=100,
@@ -191,29 +219,54 @@ def main():
 
     models = {
         "xgb": {
-            "m": XGBRegressor(**xgb_kwargs),
+            "m": xgb.XGBRegressor(**xgb_kwargs),
             "y": "kms_race",
             "fit": xgb_fit_kwargs,
         },
         "xgb_cox": {
-            "m": XGBRegressor(
+            "m": xgb.XGBRegressor(
                 objective="survival:cox", eval_metric="cox-nloglik", **xgb_kwargs
             ),
             "y": "cox",
             "fit": xgb_fit_kwargs,
         },
+        "xgb_aft": {
+            "m": partial(
+                xgb.train,
+                dict(
+                    objective="survival:aft",
+                    eval_metric="aft-nloglik",
+                    aft_loss_distribution="normal",
+                    aft_loss_distribution_scale=1.0,
+                    **xgb_kwargs,
+                ),
+            ),
+            "y": "aft",
+            "fit": dict(
+                num_boost_round=100,
+                verbose_eval=False,
+            ),
+        },
         "cb": {
-            "m": CatBoostRegressor(**cb_kwargs),
+            "m": cb.CatBoostRegressor(**cb_kwargs),
             "y": "kms_race",
             "fit": {},
         },
         "cb_cox": {
-            "m": CatBoostRegressor(loss_function="Cox", **cb_kwargs),
+            "m": cb.CatBoostRegressor(loss_function="Cox", **cb_kwargs),
             "y": "cox",
             "fit": {},
         },
+        # "cb_aft": {
+        #     "m": cb.CatBoostRegressor(
+        #         loss_function="SurvivalAft:dist=Normal",
+        #         **cb_kwargs,
+        #     ),
+        #     "y": "aft",
+        #     "fit": {},
+        # },
         "lgb": {
-            "m": LGBMRegressor(
+            "m": lgb.LGBMRegressor(
                 categorical_feature=cat_features,
                 verbose=-1,
                 verbosity=-1,
@@ -244,6 +297,8 @@ def main():
 
     print()
     calc_score(sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values()))
+
+    # Note: when predicting test use all models of type, one for each fold
 
 
 if __name__ == "__main__":
