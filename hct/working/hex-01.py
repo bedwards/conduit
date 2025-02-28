@@ -156,6 +156,12 @@ def preprocess_X(debug=False):
     return X_train, X_test, cat_features
 
 
+def preprocess_X_coxnet(X):
+    Xf = X.select_dtypes("float")
+    Xf = Xf.fillna(Xf.median())
+    return pd.concat([X.select_dtypes("int"), Xf, X.select_dtypes("category")], axis=1)
+
+
 def preprocess_y_kms_race(debug=False):
     Y = pd.DataFrame()
     race_groups = train["race_group"].unique()
@@ -200,33 +206,35 @@ def preprocess_y_coxnet(i_fold):
     )
 
 
-def as_xgb_aft(X):
+def as_xgb_aft(X, Y=None):
     dmatrix = xgb.DMatrix(X, enable_categorical=True)
-    efs_time = train["efs_time"].copy().values
-    dmatrix.set_float_info("label_lower_bound", efs_time)
-    y_upper = efs_time
-    y_upper[train["efs"] == 0] = np.inf
-    dmatrix.set_float_info("label_upper_bound", y_upper)
+    if Y:
+        efs_time = Y["efs_time"].copy().values
+        dmatrix.set_float_info("label_lower_bound", efs_time)
+        y_upper = efs_time
+        y_upper[Y["efs"] == 0] = np.inf
+        dmatrix.set_float_info("label_upper_bound", y_upper)
     return dmatrix
 
 
-def as_cb_aft(X, cat_features):
-    y_upper = train["efs_time"].rename("y_upper")
-    y_upper[train["efs"] == 0] = -1
-    label = pd.concat(
-        [
-            train["efs_time"].rename("y_lower"),
-            y_upper,
-        ],
-        axis=1,
-    )
+def as_cb_aft(X, cat_features, Y=None):
+    if Y:
+        y_upper = Y["efs_time"].rename("y_upper")
+        y_upper[Y["efs"] == 0] = -1
+        label = pd.concat(
+            [
+                Y["efs_time"].rename("y_lower"),
+                y_upper,
+            ],
+            axis=1,
+        )
+    else:
+        label = None
     pool = cb.Pool(X, label=label, cat_features=cat_features)
     return pool
 
 
 def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
-    print(f"{m_name:<7} {fold_n} fit")
-
     if train[train["efs_time"] < 0].any().any():
         raise ValueError("negative efs_time")
 
@@ -241,13 +249,15 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
 
     if m_config["y"] == "aft":
         if m_name.startswith("xgb"):
-            X = as_xgb_aft(X)
+            X = as_xgb_aft(X, train)
             X_oof = X.slice(i_oof)
+            print(f"{m_name:<7} {fold_n} fit")
             m = m(X.slice(i_fold), evals=[(X_oof, "eval")], **m_config["fit"])
 
         elif m_name.startswith("cb"):
-            X = as_cb_aft(X, cat_features)
+            X = as_cb_aft(X, cat_features, train)
             X_oof = X.slice(i_oof)
+            print(f"{m_name:<7} {fold_n} fit")
             m.fit(X.slice(i_fold), eval_set=X_oof)
 
         else:
@@ -263,9 +273,7 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
             y_fold = y.iloc[i_fold]
 
         elif m_config["y"] == "coxnet":
-            Xf = X.select_dtypes("float")
-            Xf = Xf.fillna(Xf.median())
-            X = pd.concat([Xf, X.select_dtypes(["int", "category"])], axis=1)
+            X = preprocess_X_coxnet(X)
             y_fold = preprocess_y_coxnet(i_fold)
 
         else:
@@ -282,6 +290,8 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
             fit_kwargs = dict(eval_set=[(X_oof, y.iloc[i_oof])], **fit_kwargs)
 
         m = m_config["m"]
+
+        print(f"{m_name:<7} {fold_n} fit: {X.columns}")
 
         m.fit(
             X.iloc[i_fold],
@@ -449,6 +459,8 @@ def main():
         },
     }
 
+    # -----------------------------------------------------------------------------
+
     kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
     i_oofs = []
     args = []
@@ -458,72 +470,98 @@ def main():
     ):
         i_oofs.append(i_oof)
         for m_name, m_config in models.items():
-            args.append((m_name, m_config, fold_n, i_fold, i_oof))
+            if not glob(f"{model_path}/{m_name}-{fold_n}.joblib"):
+                args.append((m_name, m_config, fold_n, i_fold, i_oof))
 
-    with Pool(min(os.cpu_count(), len(args))) as pool:
-        m_fold_y_pred_oofs = pool.starmap(fit_fold_model, args)
+    if args:
+        with Pool(min(os.cpu_count(), len(args))) as pool:
+            m_fold_y_pred_oofs = pool.starmap(fit_fold_model, args)
 
-    y_pred_oof_by_m = defaultdict(lambda: np.zeros(len(train)))
+    if len(args) == kfold.get_n_splits() * len(models):
+        y_pred_oof_by_m = defaultdict(lambda: np.zeros(len(train)))
 
-    for m_name, fold_n, y_pred_oof in m_fold_y_pred_oofs:
-        y_pred_oof_by_m[m_name][i_oofs[fold_n]] = y_pred_oof
+        for m_name, fold_n, y_pred_oof in m_fold_y_pred_oofs:
+            y_pred_oof_by_m[m_name][i_oofs[fold_n]] = y_pred_oof
 
-    y_pred_oof_by_m = dict(y_pred_oof_by_m)
-    pool_size = os.cpu_count()
-    args = [(n, y_pred_oof_by_m) for n in range(pool_size)]
+        y_pred_oof_by_m = dict(y_pred_oof_by_m)
+        pool_size = os.cpu_count()
+        args = [(n, y_pred_oof_by_m) for n in range(pool_size)]
 
-    with Pool(pool_size) as pool:
-        studies = pool.starmap(optimize_weights, args)
+        with Pool(pool_size) as pool:
+            studies = pool.starmap(optimize_weights, args)
 
-    print("\nIndividual model scores")
+        print("\nIndividual model scores")
 
-    for m_name in y_pred_oof_by_m.keys():
-        y_pred_oof_by_m[m_name] = rankdata(y_pred_oof_by_m[m_name])
-        score = calc_score(y_pred_oof_by_m[m_name])
-        print(f"  {score:.4f} {m_name}")
+        for m_name in y_pred_oof_by_m.keys():
+            y_pred_oof_by_m[m_name] = rankdata(y_pred_oof_by_m[m_name])
+            score = calc_score(y_pred_oof_by_m[m_name])
+            print(f"  {score:.4f} {m_name}")
 
-    print("\nEvenly-weighted ensemble score")
-    y_pred_oof = sum(y_pred_oof_by_m.values())
-    calc_score(y_pred_oof, debug=True, indent=2)
-    sorted_studies = []
+        print("\nEvenly-weighted ensemble score")
+        y_pred_oof = sum(y_pred_oof_by_m.values())
+        calc_score(y_pred_oof, debug=True, indent=2)
+        sorted_studies = []
 
-    for study in studies:
-        sorted_studies.append((study.best_value, study))
+        for study in studies:
+            sorted_studies.append((study.best_value, study))
 
-    sorted_studies.sort()
-    study = sorted_studies[-1][1]
-    print("\nOptimized weights")
+        sorted_studies.sort()
+        study = sorted_studies[-1][1]
+        print("\nOptimized weights")
 
-    for weight, m_name in sorted((w, m) for m, w in study.best_params.items()):
-        print(f"  {weight:.4f} {m_name}")
+        for weight, m_name in sorted((w, m) for m, w in study.best_params.items()):
+            print(f"  {weight:.4f} {m_name}")
 
-    with open(BEST_WEIGHTS_FILENAME, "w") as f:
-        json.dump(study.best_params, f)
+        with open(BEST_WEIGHTS_FILENAME, "w") as f:
+            json.dump(study.best_params, f)
 
-    print("\nOptimally-weighted ensemble score")
+        print("\nOptimally-weighted ensemble score")
 
-    for race, score in study.best_trial.user_attrs["by_race"].items():
-        print(f"{score:.4f} {race}")
+        for race, score in study.best_trial.user_attrs["by_race"].items():
+            print(f"{score:.4f} {race}")
 
-    mean = study.best_trial.user_attrs["mean"]
-    stddev = study.best_trial.user_attrs["stddev"]
-    print(f"  {study.best_value:.4f}: mean={mean:.4f} stddev={stddev:.4f}\n")
+        mean = study.best_trial.user_attrs["mean"]
+        stddev = study.best_trial.user_attrs["stddev"]
+        print(f"  {study.best_value:.4f}: mean={mean:.4f} stddev={stddev:.4f}\n")
+
+    # -------------------------------------------------------------------------
+
     y_pred_by_m = defaultdict(list)
+    xgb_aft_test = as_xgb_aft(X_test)
+    cb_aft_test = as_cb_aft(X_test, cat_features)
+    coxnet_test = preprocess_X_coxnet(X_test)
 
     for fn in glob(f"{model_path}/*.joblib"):
         m = joblib.load(fn)
         m_name, fold_n = fn.split("/")[-1].split(".")[0].split("-")
+        m_config = models[m_name]
+
+        if m_config["y"] == "aft" and m_name.startswith("xgb"):
+            X_test_m = xgb_aft_test
+
+        elif m_config["y"] == "aft" and m_name.startswith("cb"):
+            X_test_m = cb_aft_test
+
+        elif m_name == "coxnet":
+            X_test_m = coxnet_test
+
+        else:
+            X_test_m = X_test
+
         print(f"{m_name:<7} {fold_n} predict (read {fn})")
-        y_pred = m.predict(X_test, **models[m_name]["predict"])
-        if models[m_name]["y"] == "aft":
+        y_pred = m.predict(X_test_m, **m_config["predict"])
+        if m_config["y"] == "aft":
             y_pred *= -1
         y_pred_by_m[m_name].append(y_pred)
 
     for m_name, y_pred in y_pred_by_m.items():
         y_pred_by_m[m_name] = rankdata(np.sum(y_pred, axis=0))
 
+    with open(BEST_WEIGHTS_FILENAME) as f:
+        best_weights = json.load(f)
+
     y_pred = np.sum(
-        (study.best_params[m_name] * y_pred for m_name, y_pred in y_pred_by_m.items()),
+        (best_weights[m_name] * y_pred for m_name, y_pred in y_pred_by_m.items()),
         axis=0,
     )
 
