@@ -6,7 +6,7 @@ warnings.simplefilter("ignore")
 
 import os
 import sys
-from pprint import pprint
+import json
 from functools import partial
 from multiprocessing import Pool
 from collections import defaultdict
@@ -25,15 +25,7 @@ import optuna
 
 optuna.logging.set_verbosity(optuna.logging.ERROR)
 
-BEST_WEIGHTS = {
-    "cb": 0.5211,
-    "cb_aft": 0.0141,
-    "cb_cox": 0.0008,
-    "lgb": 0.6563,
-    "xgb": 0.9983,
-    "xgb_aft": 0.0011,
-    "xgb_cox": 0.0269,
-}
+BEST_WEIGHTS_FILENAME = "hex-01.json"
 
 X_TRANSFORMATION = {
     "cat_threshold": 0,
@@ -287,7 +279,8 @@ def optimize_weights(optimize_n, y_pred_oof_by_m):
     study = optuna.create_study(direction="maximize")
 
     if optimize_n == 0:
-        study.enqueue_trial(BEST_WEIGHTS)
+        with open(BEST_WEIGHTS_FILENAME) as f:
+            study.enqueue_trial((json.load(f)))
 
     study.optimize(objective, n_trials=100)
     return study
@@ -418,7 +411,13 @@ def main():
     sorted_studies.sort()
     study = sorted_studies[-1][1]
     print("\nOptimized weights")
-    pprint(study.best_params)
+
+    for m_name, weight in study.best_params.items():
+        print(f"  {weight:.4f} {m_name}")
+
+    with open(BEST_WEIGHTS_FILENAME) as f:
+        json.dump(study.best_params, f)
+
     print("\nOptimally-weighted ensemble score")
 
     for race, score in study.best_trial.user_attrs["by_race"].items():
