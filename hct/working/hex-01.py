@@ -198,13 +198,6 @@ def main():
         kfold.split(train.index, train["race_group"])
     ):
         print(f"fold {fold_n}")
-
-        race_weights = pd.Series(1.0, index=train.index)
-        for race in train["race_group"].unique():
-            race_mask = (train.iloc[i_fold]["race_group"] == race).values
-            race_weights.iloc[i_fold][race_mask] = 1.0 / (race_mask.sum() / len(i_fold))
-        sample_weight = race_weights.iloc[i_fold].values
-
         for m_name, m_config in models.items():
             print(f"  {m_name:<7} fit", end=" ", flush=True)
             m = m_config["m"]
@@ -213,14 +206,37 @@ def main():
                 X.iloc[i_fold],
                 y.iloc[i_fold],
                 eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
-                sample_weight=sample_weight,
                 **m_config["fit"],
             )
             print("predict")
             y_pred_oof_by_m[m_name][i_oof] = m.predict(X.iloc[i_oof])
 
+    race_weights = {}
+    for race in train["race_group"].unique():
+        race_mask = train["race_group"] == race
+        race_weights[race] = {}
+        for m_name, y_pred in y_pred_oof_by_m.items():
+            race_score = concordance_index(
+                train.loc[race_mask, "efs_time"],
+                -y_pred[race_mask],
+                train.loc[race_mask, "efs"],
+            )
+            race_weights[race][m_name] = race_score**2
+
+    y_pred_oof = np.zeros(len(train))
+    for race in train["race_group"].unique():
+        race_mask = train["race_group"] == race
+        weights = race_weights[race]
+        total_weight = sum(weights.values())
+        for m_name, y_pred in y_pred_oof_by_m.items():
+            y_pred_oof[race_mask] += rankdata(y_pred[race_mask]) * (
+                weights[m_name] / total_weight
+            )
+
+    # sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values())
+
     print()
-    calc_score(sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values()))
+    calc_score(y_pred_oof)
 
 
 if __name__ == "__main__":
