@@ -7,6 +7,7 @@ warnings.simplefilter("ignore")
 import os
 import sys
 import json
+from glob import glob
 from functools import partial
 from multiprocessing import Pool
 from collections import defaultdict
@@ -24,6 +25,7 @@ from scipy.stats import rankdata
 from lifelines import KaplanMeierFitter, NelsonAalenFitter
 from lifelines.utils import concordance_index
 import optuna
+import joblib
 
 optuna.logging.set_verbosity(optuna.logging.ERROR)
 
@@ -56,6 +58,9 @@ except NameError:
 else:
     RUNNING_ON_KAGGLE = True
 
+name = "hex-01"
+model_path = f"{name}-models"
+os.makedirs(model_path, exist_ok=True)
 data_dir = "equity-post-HCT-survival-predictions"
 
 train = pd.read_csv(f"../input/{data_dir}/train.csv").set_index("ID").sort_index()
@@ -140,14 +145,15 @@ def preprocess_X(debug=False):
         Xo[col], _ = Xo[col].factorize(use_na_sentinel=False)
         Xo[col] = Xo[col].astype("int32").astype("category")
     X = pd.concat([Xn, Xo], axis=1)
-    X = X[: len(train)]
     cat_features = X.select_dtypes("category").columns.to_list()
     if debug:
         X.info()
         for col in X.select_dtypes("category"):
             print(f"{X[col].cat.categories} {col}")
-    assert X.shape == (28800, 57)
-    return X, cat_features
+    X_train = X[: len(train)]
+    X_test = X[len(train) :]
+    assert X_train.shape == (28800, 57)
+    return X_train, X_test, cat_features
 
 
 def preprocess_y_kms_race(debug=False):
@@ -231,7 +237,7 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
         raise ValueError("inf in train")
 
     m = m_config["m"]
-    X, cat_features = preprocess_X()
+    X, _, cat_features = preprocess_X()
 
     if m_config["y"] == "aft":
         if m_name.startswith("xgb"):
@@ -283,6 +289,9 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
             **fit_kwargs,
         )
 
+    fn = f"{model_path}/{m_name}-{fold_n}.joblib"
+    joblib.dump(m, fn)
+    print(f"wrote {fn}")
     print(f"{m_name:<7} {fold_n} predict")
     y_pred_oof = m.predict(X_oof, **m_config["predict"])
 
@@ -322,7 +331,7 @@ def optimize_weights(optimize_n, y_pred_oof_by_m):
 
 
 def main():
-    _, cat_features = preprocess_X(debug=True)
+    _, X_test, cat_features = preprocess_X(debug=True)
 
     xgb_kwargs = dict(
         enable_categorical=True,
@@ -498,9 +507,29 @@ def main():
 
     mean = study.best_trial.user_attrs["mean"]
     stddev = study.best_trial.user_attrs["stddev"]
-    print(f"  {study.best_value:.4f}: mean={mean:.4f} stddev={stddev:.4f}")
+    print(f"  {study.best_value:.4f}: mean={mean:.4f} stddev={stddev:.4f}\n")
+    y_pred_by_m = defaultdict(list)
 
-    # Note: when predicting test use all models of type, one for each fold
+    for fn in glob(f"{model_path}/*.joblib"):
+        m = joblib.load(fn)
+        m_name, fold_n = fn.split("/")[-1].split(".")[0].split("-")
+        print(f"{m_name:<7} {fold_n} predict (read {fn})")
+        y_pred = m.predict(X_test, **models[m_name]["predict"])
+        if models[m_name]["y"] == "aft":
+            y_pred *= -1
+        y_pred_by_m[m_name].append(y_pred)
+
+    for m_name, y_pred in y_pred_by_m.items():
+        y_pred_by_m[m_name] = rankdata(np.sum(y_pred, axis=0))
+
+    y_pred = np.sum(
+        (study.best_params[m_name] * y_pred for m_name, y_pred in y_pred_by_m.items()),
+        axis=0,
+    )
+
+    s = pd.DataFrame(y_pred, index=test.index, columns=["prediction"])
+    s.to_csv("submission.csv")
+    print("wrote submission.csv")
 
 
 if __name__ == "__main__":
