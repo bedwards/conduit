@@ -211,32 +211,8 @@ def main():
             print("predict")
             y_pred_oof_by_m[m_name][i_oof] = m.predict(X.iloc[i_oof])
 
-    race_weights = {}
-    for race in train["race_group"].unique():
-        race_mask = train["race_group"] == race
-        race_weights[race] = {}
-        for m_name, y_pred in y_pred_oof_by_m.items():
-            race_score = concordance_index(
-                train.loc[race_mask, "efs_time"],
-                -y_pred[race_mask],
-                train.loc[race_mask, "efs"],
-            )
-            race_weights[race][m_name] = race_score**2
-
-    y_pred_oof = np.zeros(len(train))
-    for race in train["race_group"].unique():
-        race_mask = train["race_group"] == race
-        weights = race_weights[race]
-        total_weight = sum(weights.values())
-        for m_name, y_pred in y_pred_oof_by_m.items():
-            y_pred_oof[race_mask] += rankdata(y_pred[race_mask]) * (
-                weights[m_name] / total_weight
-            )
-
-    # sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values())
-
     print()
-    calc_score(y_pred_oof)
+    calc_score(sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values()))
 
 
 if __name__ == "__main__":
