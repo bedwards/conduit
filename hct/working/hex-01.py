@@ -11,14 +11,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from xgboost import XGBRegressor
+from catboost import CatBoostRegressor
 from lightgbm import LGBMRegressor
 from sklearn.model_selection import KFold, StratifiedKFold
 from scipy.stats import rankdata
 from lifelines import KaplanMeierFitter, NelsonAalenFitter
 from lifelines.utils import concordance_index
 
+X_TRANSFORMATION = {
+    "cat_threshold": 0,
+}
+
 Y_TRANSFORMATION = {
-    "plot": True,
+    "plot": False,
     "by_race": True,
     "gap": 0.35,
     # kms
@@ -90,13 +95,24 @@ def plot_y_transformation(Y):
 
 def main():
     X = pd.concat([train.drop(columns=["efs", "efs_time"]), test])
-    Xf = X.select_dtypes(["int", "float"]).astype("float32")
+    Xn = X.select_dtypes(["int", "float"])
+    for col in Xn:
+        if Xn[col].nunique() < X_TRANSFORMATION["cat_threshold"]:
+            Xn[col] = Xn[col].fillna(-1).astype("int32")
+            Xn[col] = pd.Categorical(
+                Xn[col], categories=sorted(Xn[col].unique()), ordered=True
+            )
     Xo = X.select_dtypes("object").astype("category")
     for col in Xo:
         Xo[col], _ = Xo[col].factorize(use_na_sentinel=False)
         Xo[col] = Xo[col].astype("int32").astype("category")
-    X = pd.concat([Xf, Xo], axis=1)
+    X = pd.concat([Xn, Xo], axis=1)
     X = X[: len(train)]
+    cat_features = X.select_dtypes("category").columns.to_list()
+    X.info()
+    for col in X.select_dtypes("category"):
+        print(f"{X[col].cat.categories} {col}")
+    assert X.shape == (28800, 57)
 
     Y = pd.DataFrame()
     race_groups = train["race_group"].unique()
@@ -131,6 +147,15 @@ def main():
 
     xgb_kwargs = dict(enable_categorical=True, verbosity=0)
     xgb_fit_kwargs = dict(verbose=False)
+    cb_kwargs = dict(
+        iterations=100,
+        learning_rate=0.1,
+        bootstrap_type="Bernoulli",
+        grow_policy="Depthwise",
+        boosting_type="Plain",
+        cat_features=cat_features,
+        silent=True,
+    )
 
     models = {
         "xgb": {
@@ -145,9 +170,19 @@ def main():
             "y": y_cox,
             "fit": xgb_fit_kwargs,
         },
+        "cb": {
+            "m": CatBoostRegressor(**cb_kwargs),
+            "y": y,
+            "fit": {},
+        },
+        "cb_cox": {
+            "m": CatBoostRegressor(loss_function="Cox", **cb_kwargs),
+            "y": y_cox,
+            "fit": {},
+        },
         "lgb": {
             "m": LGBMRegressor(
-                categorical_feature=X.select_dtypes("category").columns.to_list(),
+                categorical_feature=cat_features,
                 verbose=-1,
                 verbosity=-1,
             ),

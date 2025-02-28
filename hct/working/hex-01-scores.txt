@@ -1,3 +1,14 @@
+xgb, xgb_cox, cb, cb_cox, lgb
+kms by race with 0.35 gap StratifiedKFold
+0.6911 American Indian or Alaska Native
+0.6999 Asian
+0.6788 Black or African-American
+0.6868 More than one race
+0.6759 Native Hawaiian or other Pacific Islander
+0.6752 White
+0.6757: mean=0.6846 stddev=0.0089
+
+xgb, xgb_cox, lgb
 kms by race with 0.35 gap StratifiedKFold
 0.6871 American Indian or Alaska Native
 0.6983 Asian
