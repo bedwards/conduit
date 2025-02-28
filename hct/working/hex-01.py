@@ -188,6 +188,12 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
     if train[train["efs_time"] < 0].any().any():
         raise ValueError("negative efs_time")
 
+    if np.isinf(train['efs_time']).values.any():
+        raise ValueError("inf in efs_time")
+
+    if np.isinf(train.select_dtypes("float")).values.any():
+        raise ValueError("inf in train")
+
     m = m_config["m"]
     X, cat_features = preprocess_X()
 
