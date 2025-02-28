@@ -181,7 +181,7 @@ class Duct:
             from multiprocessing import Pool
 
             with Pool(
-                min(os.cpu_count(), self.kfold.get_n_splits() * len(args))
+                min(os.cpu_count(), len(args))
             ) as pool:
                 pool.starmap(self.fit_fold_model, args)
 
