@@ -6,6 +6,7 @@ warnings.simplefilter("ignore")
 
 import os
 import sys
+from pprint import pprint
 from functools import partial
 from multiprocessing import Pool
 from collections import defaultdict
@@ -20,6 +21,9 @@ from sklearn.model_selection import KFold, StratifiedKFold
 from scipy.stats import rankdata
 from lifelines import KaplanMeierFitter, NelsonAalenFitter
 from lifelines.utils import concordance_index
+import optuna
+
+optuna.logging.set_verbosity(optuna.logging.ERROR)
 
 X_TRANSFORMATION = {
     "cat_threshold": 0,
@@ -50,27 +54,38 @@ test = pd.read_csv(f"../input/{data_dir}/test.csv").set_index("ID").sort_index()
 test.index = test.index.astype("int32")
 
 
-def calc_score(y_pred_oof, debug=False):
+def calc_score(y_pred_oof, details=False, debug=False, indent=0):
     df = train.assign(prediction=y_pred_oof).reset_index()
+
     indices_by_race = {
         race: sorted(indices)
         for race, indices in df.groupby(["race_group"]).groups.items()
     }
+
     score_by_race = {}
+
     for race, indices in indices_by_race.items():
         df_race = df.iloc[indices]
         score_by_race[race] = concordance_index(
             df_race["efs_time"], -df_race["prediction"], df_race["efs"]
         )
-    if debug:
-        for race, score in score_by_race.items():
-            print(f"{score:.4f} {race}")
+
     scores = list(score_by_race.values())
     scores_mean = np.mean(scores)
     scores_stddev = np.sqrt(np.var(scores))
     score = float(scores_mean - scores_stddev)
+
     if debug:
-        print(f"{score:.4f}: mean={scores_mean:.4f} stddev={scores_stddev:.4f}")
+        for race, score in score_by_race.items():
+            print(f"{' '*indent}{score:.4f} {race}")
+
+        print(
+            f"{' '*indent}{score:.4f}: mean={scores_mean:.4f} stddev={scores_stddev:.4f}"
+        )
+
+    if details:
+        return score, score_by_race, scores_mean, scores_stddev
+
     return score
 
 
@@ -188,7 +203,7 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
     if train[train["efs_time"] < 0].any().any():
         raise ValueError("negative efs_time")
 
-    if np.isinf(train['efs_time']).values.any():
+    if np.isinf(train["efs_time"]).values.any():
         raise ValueError("inf in efs_time")
 
     if np.isinf(train.select_dtypes("float")).values.any():
@@ -238,6 +253,44 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
         y_pred_oof *= -1
 
     return m_name, fold_n, y_pred_oof
+
+
+def optimize_weights(optimize_n, y_pred_oof_by_m):
+    trial_n = [0]
+
+    def objective(trial):
+        if trial_n[0] % 10 == 0:
+            print(f"{optimize_n} trial {trial_n[0]}")
+
+        trial_n[0] += 1
+        y_pred_oof_w = np.zeros(len(train))
+
+        for m_name, y_pred_oof in y_pred_oof_by_m.items():
+            y_pred_oof_w += y_pred_oof * trial.suggest_float(m_name, 0, 1)
+
+        score, by_race, mean, stddev = calc_score(y_pred_oof_w, details=True)
+        trial.set_user_attr("by_race", by_race)
+        trial.set_user_attr("mean", mean)
+        trial.set_user_attr("stddev", stddev)
+        return score
+
+    study = optuna.create_study(direction="maximize")
+
+    if optimize_n == 0:
+        study.enqueue_trial(
+            {
+                "xgb": 0.9983,
+                "xgb_cox": 0.0269,
+                "xgb_aft": 0.0011,
+                "cb": 0.5211,
+                "cb_cox": 0.0008,
+                "cb_aft": 0.0141,
+                "lgb": 0.6563,
+            }
+        )
+
+    study.optimize(objective, n_trials=100)
+    return study
 
 
 def main():
@@ -340,14 +393,40 @@ def main():
     for m_name, fold_n, y_pred_oof in m_fold_y_pred_oofs:
         y_pred_oof_by_m[m_name][i_oofs[fold_n]] = y_pred_oof
 
-    for m_name in y_pred_oof_by_m.keys():
-        y_pred_oof = rankdata(y_pred_oof_by_m[m_name])
-        score = calc_score(y_pred_oof)
-        print(f"{score:.4f} {m_name}")
+    y_pred_oof_by_m = dict(y_pred_oof_by_m)
+    pool_size = os.cpu_count()
+    args = [(n, y_pred_oof_by_m) for n in range(pool_size)]
 
-    print()
-    y_pred_oof = sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values())
-    calc_score(y_pred_oof, debug=True)
+    with Pool(pool_size) as pool:
+        studies = pool.starmap(optimize_weights, args)
+
+    print("\nIndividual model scores")
+
+    for m_name in y_pred_oof_by_m.keys():
+        y_pred_oof_by_m[m_name] = rankdata(y_pred_oof_by_m[m_name])
+        score = calc_score(y_pred_oof_by_m[m_name])
+        print(f"  {score:.4f} {m_name}")
+
+    print("\nEvenly-weighted ensemble score")
+    y_pred_oof = sum(y_pred_oof_by_m.values())
+    calc_score(y_pred_oof, debug=True, indent=2)
+    sorted_studies = []
+
+    for study in studies:
+        sorted_studies.append((study.best_value, study))
+
+    sorted_studies.sort()
+    study = sorted_studies[-1][1]
+    print("\nOptimized weights")
+    pprint(study.best_params)
+    print("\nOptimally-weighted ensemble score")
+
+    for race, score in study.best_trial.user_attrs["by_race"].items():
+        print(f"{score:.4f} {race}")
+
+    mean = study.best_trial.user_attrs["mean"]
+    stddev = study.best_trial.user_attrs["stddev"]
+    print(f"  {study.best_value:.4f}: mean={mean:.4f} stddev={stddev:.4f}")
 
     # Note: when predicting test use all models of type, one for each fold
 
