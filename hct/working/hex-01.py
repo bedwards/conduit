@@ -25,6 +25,16 @@ import optuna
 
 optuna.logging.set_verbosity(optuna.logging.ERROR)
 
+BEST_WEIGHTS = {
+    "cb": 0.5211,
+    "cb_aft": 0.0141,
+    "cb_cox": 0.0008,
+    "lgb": 0.6563,
+    "xgb": 0.9983,
+    "xgb_aft": 0.0011,
+    "xgb_cox": 0.0269,
+}
+
 X_TRANSFORMATION = {
     "cat_threshold": 0,
 }
@@ -277,17 +287,7 @@ def optimize_weights(optimize_n, y_pred_oof_by_m):
     study = optuna.create_study(direction="maximize")
 
     if optimize_n == 0:
-        study.enqueue_trial(
-            {
-                "xgb": 0.9983,
-                "xgb_cox": 0.0269,
-                "xgb_aft": 0.0011,
-                "cb": 0.5211,
-                "cb_cox": 0.0008,
-                "cb_aft": 0.0141,
-                "lgb": 0.6563,
-            }
-        )
+        study.enqueue_trial(BEST_WEIGHTS)
 
     study.optimize(objective, n_trials=100)
     return study
