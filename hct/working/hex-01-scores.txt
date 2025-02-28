@@ -1,3 +1,22 @@
+
+
+
+Optimally-weighted ensemble score
+0.6909 American Indian or Alaska Native
+0.6995 Asian
+0.6775 Black or African-American
+0.6858 More than one race
+0.6775 Native Hawaiian or other Pacific Islander
+0.6755 White
+  0.6758: mean=0.6844 stddev=0.0086
+
+
+
+
+
+
+
+
 0.6725 xgb
 0.6669 xgb_cox
 0.6634 xgb_aft

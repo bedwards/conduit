@@ -18,6 +18,7 @@ import xgboost as xgb
 import catboost as cb
 import lightgbm as lgb
 from sksurv.linear_model import CoxnetSurvivalAnalysis
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.model_selection import KFold, StratifiedKFold
 from scipy.stats import rankdata
 from lifelines import KaplanMeierFitter, NelsonAalenFitter
@@ -395,6 +396,12 @@ def main():
         "coxnet": {
             "m": CoxnetSurvivalAnalysis(),
             "y": "coxnet",
+            "fit": {},
+            "predict": {},
+        },
+        "hgb": {
+            "m": HistGradientBoostingRegressor(),
+            "y": "kms_race",
             "fit": {},
             "predict": {},
         },
