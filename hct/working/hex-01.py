@@ -198,6 +198,13 @@ def main():
         kfold.split(train.index, train["race_group"])
     ):
         print(f"fold {fold_n}")
+
+        race_weights = pd.Series(1.0, index=train.index)
+        for race in train["race_group"].unique():
+            race_mask = (train.iloc[i_fold]["race_group"] == race).values
+            race_weights.iloc[i_fold][race_mask] = 1.0 / (race_mask.sum() / len(i_fold))
+        sample_weight = race_weights.iloc[i_fold].values
+
         for m_name, m_config in models.items():
             print(f"  {m_name:<7} fit", end=" ", flush=True)
             m = m_config["m"]
@@ -206,6 +213,7 @@ def main():
                 X.iloc[i_fold],
                 y.iloc[i_fold],
                 eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
+                sample_weight=sample_weight,
                 **m_config["fit"],
             )
             print("predict")
