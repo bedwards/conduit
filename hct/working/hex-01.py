@@ -49,6 +49,13 @@ Y_TRANSFORMATION = {
     # "sign": -1,
 }
 
+try:
+    get_ipython
+except NameError:
+    RUNNING_ON_KAGGLE = False
+else:
+    RUNNING_ON_KAGGLE = True
+
 data_dir = "equity-post-HCT-survival-predictions"
 
 train = pd.read_csv(f"../input/{data_dir}/train.csv").set_index("ID").sort_index()
@@ -316,15 +323,29 @@ def optimize_weights(optimize_n, y_pred_oof_by_m):
 
 def main():
     _, cat_features = preprocess_X(debug=True)
-    xgb_kwargs = dict(enable_categorical=True, max_depth=3, verbosity=0)
+
+    xgb_kwargs = dict(
+        enable_categorical=True,
+        device="cuda" if RUNNING_ON_KAGGLE else "cpu",
+        max_depth=3,
+        colsample_bytree=0.5,
+        subsample=0.8,
+        n_estimators=2000,
+        learning_rate=0.02,
+        min_child_weight=80,
+        verbosity=0,
+    )
+
     xgb_fit_kwargs = dict(verbose=False)
+
     cb_kwargs = dict(
-        iterations=100,
-        learning_rate=0.1,
-        bootstrap_type="Bernoulli",
-        grow_policy="Depthwise",
-        boosting_type="Plain",
         cat_features=cat_features,
+        learning_rate=0.1,
+        grow_policy="Lossguide",
+        # grow_policy="Depthwise",
+        # iterations=100,
+        # bootstrap_type="Bernoulli",
+        # boosting_type="Plain",
         silent=True,
     )
 
@@ -362,13 +383,17 @@ def main():
             "predict": {},
         },
         "cb": {
-            "m": cb.CatBoostRegressor(**cb_kwargs),
+            "m": cb.CatBoostRegressor(
+                task_type="GPU" if RUNNING_ON_KAGGLE else "CPU", **cb_kwargs
+            ),
             "y": "kms_race",
             "fit": {},
             "predict": {},
         },
         "cb_cox": {
-            "m": cb.CatBoostRegressor(loss_function="Cox", **cb_kwargs),
+            "m": cb.CatBoostRegressor(
+                loss_function="Cox", iterations=400, use_best_model=False, **cb_kwargs
+            ),
             "y": "cox",
             "fit": {},
             "predict": dict(prediction_type="Exponent"),
@@ -377,6 +402,8 @@ def main():
             "m": cb.CatBoostRegressor(
                 loss_function="SurvivalAft:dist=Normal",
                 eval_metric="SurvivalAft",
+                iterations=400,
+                use_best_model=False,
                 **cb_kwargs,
             ),
             "y": "aft",
@@ -386,6 +413,12 @@ def main():
         "lgb": {
             "m": lgb.LGBMRegressor(
                 categorical_feature=cat_features,
+                device="gpu" if RUNNING_ON_KAGGLE else "cpu",
+                max_depth=3,
+                colsample_bytree=0.4,
+                n_estimators=2500,
+                learning_rate=0.02,
+                num_leaves=8,
                 verbose=-1,
                 verbosity=-1,
             ),
