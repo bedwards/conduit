@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, StratifiedKFold
 from scipy.stats import rankdata
 from lifelines import KaplanMeierFitter, NelsonAalenFitter
 from lifelines.utils import concordance_index
@@ -156,10 +156,12 @@ def main():
         },
     }
 
-    kfold = KFold(n_splits=10, shuffle=True, random_state=42)
+    kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
     y_pred_oof_by_m = defaultdict(lambda: np.zeros(len(train)))
 
-    for fold_n, (i_fold, i_oof) in enumerate(kfold.split(train.index)):
+    for fold_n, (i_fold, i_oof) in enumerate(
+        kfold.split(train.index, train["race_group"])
+    ):
         print(f"fold {fold_n}")
         for m_name, m_config in models.items():
             print(f"  {m_name:<7} fit", end=" ", flush=True)

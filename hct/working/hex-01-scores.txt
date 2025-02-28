@@ -1,4 +1,13 @@
-kms by race with 0.35 gap 
+kms by race with 0.35 gap StratifiedKFold
+0.6871 American Indian or Alaska Native
+0.6983 Asian
+0.6764 Black or African-American
+0.6809 More than one race
+0.6714 Native Hawaiian or other Pacific Islander
+0.6762 White
+0.6729: mean=0.6817 stddev=0.0088
+
+kms by race with 0.35 gap KFold
 0.6877 American Indian or Alaska Native
 0.6964 Asian
 0.6761 Black or African-American
@@ -7,7 +16,7 @@ kms by race with 0.35 gap
 0.6759 White
 0.6726: mean=0.6811 stddev=0.0085
 
-kms by race with 0.2 gap
+kms by race with 0.2 gap KFold
 0.6851 American Indian or Alaska Native
 0.6982 Asian
 0.6756 Black or African-American
@@ -16,7 +25,7 @@ kms by race with 0.2 gap
 0.6767 White
 0.6720: mean=0.6809 stddev=0.0089
 
-kms with 0.2 gap
+kms with 0.2 gap KFold
 0.6873 American Indian or Alaska Native
 0.6973 Asian
 0.6752 Black or African-American
@@ -25,7 +34,7 @@ kms with 0.2 gap
 0.6743 White
 0.6717: mean=0.6808 stddev=0.0091
 
-nach
+nach KFold
 0.6861 American Indian or Alaska Native
 0.6967 Asian
 0.6764 Black or African-American
@@ -33,9 +42,6 @@ nach
 0.6688 Native Hawaiian or other Pacific Islander
 0.6756 White
 0.6715: mean=0.6804 stddev=0.0089
-
-
-kms by race with 0.35 gap
 
 nach with gap
 0.6875 American Indian or Alaska Native
