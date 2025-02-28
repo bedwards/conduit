@@ -412,7 +412,7 @@ def main():
     study = sorted_studies[-1][1]
     print("\nOptimized weights")
 
-    for m_name, weight in study.best_params.items():
+    for weight, m_name in sorted((w, m) for m, w in study.best_params.items()):
         print(f"  {weight:.4f} {m_name}")
 
     with open(BEST_WEIGHTS_FILENAME, "w") as f:
