@@ -17,6 +17,7 @@ import seaborn as sns
 import xgboost as xgb
 import catboost as cb
 import lightgbm as lgb
+from sksurv.linear_model import CoxnetSurvivalAnalysis
 from sklearn.model_selection import KFold, StratifiedKFold
 from scipy.stats import rankdata
 from lifelines import KaplanMeierFitter, NelsonAalenFitter
@@ -117,7 +118,9 @@ def plot_y_transformation(Y):
 
 def preprocess_X(debug=False):
     X = pd.concat([train.drop(columns=["efs", "efs_time"]), test])
-    Xn = X.select_dtypes(["int", "float"])
+    Xi = X.select_dtypes("int").astype("int32")
+    Xf = X.select_dtypes("float").astype("float32")
+    Xn = pd.concat([Xi, Xf], axis=1)
     for col in Xn:
         if Xn[col].nunique() < X_TRANSFORMATION["cat_threshold"]:
             Xn[col] = Xn[col].fillna(-1).astype("int32")
@@ -160,7 +163,7 @@ def preprocess_y_kms_race(debug=False):
                 - Y_race.loc[train["efs"] == 1, "y"].min()
             )
             if debug:
-                print(f"{gap:.4f} {race_group}")
+                print(f"{gap:.4f} kms_race gap for {race_group} ")
             Y_race.loc[train["efs"] == 0, "y"] -= gap
         Y = pd.concat([Y, Y_race])
     Y = Y.sort_index()
@@ -173,6 +176,14 @@ def preprocess_y_cox():
     Y_cox["y"] = train["efs_time"]
     Y_cox.loc[Y_cox["efs"] == 0, "y"] *= -1
     return Y_cox["y"]
+
+
+def preprocess_y_coxnet(i_fold):
+    df = train.iloc[i_fold]
+    return np.array(
+        list(zip(df["efs"].astype("bool"), df["efs_time"])),
+        dtype=[("E", "bool"), ("T", df["efs_time"].dtype)],
+    )
 
 
 def as_xgb_aft(X):
@@ -231,21 +242,37 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
     else:
         if m_config["y"] == "kms_race":
             y = preprocess_y_kms_race(m_name == "xgb" and fold_n == 0)
+            y_fold = y.iloc[i_fold]
 
         elif m_config["y"] == "cox":
             y = preprocess_y_cox()
+            y_fold = y.iloc[i_fold]
+
+        elif m_config["y"] == "coxnet":
+            Xf = X.select_dtypes("float")
+            Xf = Xf.fillna(Xf.median())
+            X = pd.concat([Xf, X.select_dtypes(["int", "category"])], axis=1)
+            y_fold = preprocess_y_coxnet(i_fold)
 
         else:
             raise ValueError(f'unknown y transformation: {m_config["y"]}')
 
-        m = m_config["m"]
         X_oof = X.iloc[i_oof]
+        fit_kwargs = m_config["fit"]
+
+        if (
+            m_name.startswith("xgb")
+            or m_name.startswith("cb")
+            or m_name.startswith("lgb")
+        ):
+            fit_kwargs = dict(eval_set=[(X_oof, y.iloc[i_oof])], **fit_kwargs)
+
+        m = m_config["m"]
 
         m.fit(
             X.iloc[i_fold],
-            y.iloc[i_fold],
-            eval_set=[(X_oof, y.iloc[i_oof])],
-            **m_config["fit"],
+            y_fold,
+            **fit_kwargs,
         )
 
     print(f"{m_name:<7} {fold_n} predict")
@@ -362,6 +389,12 @@ def main():
                 verbosity=-1,
             ),
             "y": "kms_race",
+            "fit": {},
+            "predict": {},
+        },
+        "coxnet": {
+            "m": CoxnetSurvivalAnalysis(),
+            "y": "coxnet",
             "fit": {},
             "predict": {},
         },
