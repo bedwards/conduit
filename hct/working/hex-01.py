@@ -4,8 +4,10 @@ import warnings
 
 warnings.simplefilter("ignore")
 
+import os
 import sys
 from collections import defaultdict
+from multiprocessing import Pool
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -93,7 +95,7 @@ def plot_y_transformation(Y):
     plt.show()
 
 
-def main():
+def preprocess_X(debug=False):
     X = pd.concat([train.drop(columns=["efs", "efs_time"]), test])
     Xn = X.select_dtypes(["int", "float"])
     for col in Xn:
@@ -109,11 +111,15 @@ def main():
     X = pd.concat([Xn, Xo], axis=1)
     X = X[: len(train)]
     cat_features = X.select_dtypes("category").columns.to_list()
-    X.info()
-    for col in X.select_dtypes("category"):
-        print(f"{X[col].cat.categories} {col}")
+    if debug:
+        X.info()
+        for col in X.select_dtypes("category"):
+            print(f"{X[col].cat.categories} {col}")
     assert X.shape == (28800, 57)
+    return X, cat_features
 
+
+def preprocess_y_kms_race(debug=False):
     Y = pd.DataFrame()
     race_groups = train["race_group"].unique()
     if not Y_TRANSFORMATION["by_race"]:
@@ -133,18 +139,44 @@ def main():
                 Y_race.loc[train["efs"] == 0, "y"].max()
                 - Y_race.loc[train["efs"] == 1, "y"].min()
             )
-            print(f"{gap:.4f} {race_group}")
+            if debug:
+                print(f"{gap:.4f} {race_group}")
             Y_race.loc[train["efs"] == 0, "y"] -= gap
         Y = pd.concat([Y, Y_race])
     Y = Y.sort_index()
-    y = Y["y"]
     plot_y_transformation(Y)
+    return Y["y"]
 
+
+def preprocess_y_cox():
     Y_cox = train[["efs", "efs_time"]]
     Y_cox["y"] = train["efs_time"]
     Y_cox.loc[Y_cox["efs"] == 0, "y"] *= -1
-    y_cox = Y_cox["y"]
+    return Y_cox["y"]
 
+
+def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
+    print(f"{m_name:<7} {fold_n} fit")
+    X, _ = preprocess_X()
+    if m_config["y"] == "kms_race":
+        y = preprocess_y_kms_race(m_name == "xgb")
+    elif m_config["y"] == "cox":
+        y = preprocess_y_cox()
+    else:
+        raise
+    m = m_config["m"]
+    m.fit(
+        X.iloc[i_fold],
+        y.iloc[i_fold],
+        eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
+        **m_config["fit"],
+    )
+    print(f"{m_name:<7} {fold_n} predict")
+    return m_name, fold_n, m.predict(X.iloc[i_oof])
+
+
+def main():
+    _, cat_features = preprocess_X(debug=True)
     xgb_kwargs = dict(enable_categorical=True, verbosity=0)
     xgb_fit_kwargs = dict(verbose=False)
     cb_kwargs = dict(
@@ -160,24 +192,24 @@ def main():
     models = {
         "xgb": {
             "m": XGBRegressor(**xgb_kwargs),
-            "y": y,
+            "y": "kms_race",
             "fit": xgb_fit_kwargs,
         },
         "xgb_cox": {
             "m": XGBRegressor(
                 objective="survival:cox", eval_metric="cox-nloglik", **xgb_kwargs
             ),
-            "y": y_cox,
+            "y": "cox",
             "fit": xgb_fit_kwargs,
         },
         "cb": {
             "m": CatBoostRegressor(**cb_kwargs),
-            "y": y,
+            "y": "kms_race",
             "fit": {},
         },
         "cb_cox": {
             "m": CatBoostRegressor(loss_function="Cox", **cb_kwargs),
-            "y": y_cox,
+            "y": "cox",
             "fit": {},
         },
         "lgb": {
@@ -186,30 +218,29 @@ def main():
                 verbose=-1,
                 verbosity=-1,
             ),
-            "y": y,
+            "y": "kms_race",
             "fit": {},
         },
     }
 
     kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
-    y_pred_oof_by_m = defaultdict(lambda: np.zeros(len(train)))
+    i_oofs = []
+    args = []
 
     for fold_n, (i_fold, i_oof) in enumerate(
         kfold.split(train.index, train["race_group"])
     ):
-        print(f"fold {fold_n}")
+        i_oofs.append(i_oof)
         for m_name, m_config in models.items():
-            print(f"  {m_name:<7} fit", end=" ", flush=True)
-            m = m_config["m"]
-            y = m_config["y"]
-            m.fit(
-                X.iloc[i_fold],
-                y.iloc[i_fold],
-                eval_set=[(X.iloc[i_oof], y.iloc[i_oof])],
-                **m_config["fit"],
-            )
-            print("predict")
-            y_pred_oof_by_m[m_name][i_oof] = m.predict(X.iloc[i_oof])
+            args.append((m_name, m_config, fold_n, i_fold, i_oof))
+
+    with Pool(min(os.cpu_count(), len(args))) as pool:
+        m_fold_y_pred_oofs = pool.starmap(fit_fold_model, args)
+
+    y_pred_oof_by_m = defaultdict(lambda: np.zeros(len(train)))
+
+    for m_name, fold_n, y_pred_oof in m_fold_y_pred_oofs:
+        y_pred_oof_by_m[m_name][i_oofs[fold_n]] = y_pred_oof
 
     print()
     calc_score(sum(rankdata(y_pred) for y_pred in y_pred_oof_by_m.values()))
