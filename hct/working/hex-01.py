@@ -208,7 +208,7 @@ def preprocess_y_coxnet(i_fold):
 
 def as_xgb_aft(X, Y=None):
     dmatrix = xgb.DMatrix(X, enable_categorical=True)
-    if Y:
+    if Y is not None:
         efs_time = Y["efs_time"].copy().values
         dmatrix.set_float_info("label_lower_bound", efs_time)
         y_upper = efs_time
@@ -218,7 +218,7 @@ def as_xgb_aft(X, Y=None):
 
 
 def as_cb_aft(X, cat_features, Y=None):
-    if Y:
+    if Y is not None:
         y_upper = Y["efs_time"].rename("y_upper")
         y_upper[Y["efs"] == 0] = -1
         label = pd.concat(
@@ -291,7 +291,7 @@ def fit_fold_model(m_name, m_config, fold_n, i_fold, i_oof):
 
         m = m_config["m"]
 
-        print(f"{m_name:<7} {fold_n} fit: {X.columns}")
+        print(f"{m_name:<7} {fold_n} fit")
 
         m.fit(
             X.iloc[i_fold],
