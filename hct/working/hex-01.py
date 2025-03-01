@@ -8,6 +8,7 @@ import os
 import sys
 import json
 from glob import glob
+from pprint import pprint
 from functools import partial
 from multiprocessing import Pool
 from collections import defaultdict
@@ -29,7 +30,7 @@ import joblib
 
 optuna.logging.set_verbosity(optuna.logging.ERROR)
 
-BEST_WEIGHTS_FILENAME = "hex-01.json"
+name = "hex-01"
 
 X_TRANSFORMATION = {
     "cat_threshold": 0,
@@ -51,21 +52,22 @@ Y_TRANSFORMATION = {
     # "sign": -1,
 }
 
+
 try:
     get_ipython
 except NameError:
     RUNNING_ON_KAGGLE = False
+    model_path = f"./{name}-models"
 else:
     RUNNING_ON_KAGGLE = True
+    model_path = f"../input/hct-{name}-models"
 
-name = "hex-01"
-model_path = f"{name}-models"
+
 os.makedirs(model_path, exist_ok=True)
+best_weights_path = f"{model_path}/hex-01.json"
 data_dir = "equity-post-HCT-survival-predictions"
-
 train = pd.read_csv(f"../input/{data_dir}/train.csv").set_index("ID").sort_index()
 train.index = train.index.astype("int32")
-
 test = pd.read_csv(f"../input/{data_dir}/test.csv").set_index("ID").sort_index()
 test.index = test.index.astype("int32")
 
@@ -333,11 +335,76 @@ def optimize_weights(optimize_n, y_pred_oof_by_m):
     study = optuna.create_study(direction="maximize")
 
     if optimize_n == 0:
-        with open(BEST_WEIGHTS_FILENAME) as f:
+        with open(best_weights_path) as f:
             study.enqueue_trial((json.load(f)))
 
     study.optimize(objective, n_trials=100)
     return study
+
+
+def execute_training_pipeline(models):
+    kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+    i_oofs = []
+    args = []
+
+    for fold_n, (i_fold, i_oof) in enumerate(
+        kfold.split(train.index, train["race_group"])
+    ):
+        i_oofs.append(i_oof)
+        for m_name, m_config in models.items():
+            if not glob(f"{model_path}/{m_name}-{fold_n}.joblib"):
+                args.append((m_name, m_config, fold_n, i_fold, i_oof))
+
+    if args:
+        with Pool(min(os.cpu_count(), len(args))) as pool:
+            m_fold_y_pred_oofs = pool.starmap(fit_fold_model, args)
+
+    if len(args) == kfold.get_n_splits() * len(models):
+        y_pred_oof_by_m = defaultdict(lambda: np.zeros(len(train)))
+
+        for m_name, fold_n, y_pred_oof in m_fold_y_pred_oofs:
+            y_pred_oof_by_m[m_name][i_oofs[fold_n]] = y_pred_oof
+
+        y_pred_oof_by_m = dict(y_pred_oof_by_m)
+        pool_size = os.cpu_count()
+        args = [(n, y_pred_oof_by_m) for n in range(pool_size)]
+
+        with Pool(pool_size) as pool:
+            studies = pool.starmap(optimize_weights, args)
+
+        print("\nIndividual model scores")
+
+        for m_name in y_pred_oof_by_m.keys():
+            y_pred_oof_by_m[m_name] = rankdata(y_pred_oof_by_m[m_name])
+            score = calc_score(y_pred_oof_by_m[m_name])
+            print(f"  {score:.4f} {m_name}")
+
+        print("\nEvenly-weighted ensemble score")
+        y_pred_oof = sum(y_pred_oof_by_m.values())
+        calc_score(y_pred_oof, debug=True, indent=2)
+        sorted_studies = []
+
+        for study in studies:
+            sorted_studies.append((study.best_value, study))
+
+        sorted_studies.sort()
+        study = sorted_studies[-1][1]
+        print("\nOptimized weights")
+
+        for weight, m_name in sorted((w, m) for m, w in study.best_params.items()):
+            print(f"  {weight:.4f} {m_name}")
+
+        with open(best_weights_path, "w") as f:
+            json.dump(study.best_params, f)
+
+        print("\nOptimally-weighted ensemble score")
+
+        for race, score in study.best_trial.user_attrs["by_race"].items():
+            print(f"{score:.4f} {race}")
+
+        mean = study.best_trial.user_attrs["mean"]
+        stddev = study.best_trial.user_attrs["stddev"]
+        print(f"  {study.best_value:.4f}: mean={mean:.4f} stddev={stddev:.4f}\n")
 
 
 def main():
@@ -459,79 +526,25 @@ def main():
         },
     }
 
-    # -----------------------------------------------------------------------------
+    if not RUNNING_ON_KAGGLE:
+        execute_training_pipeline(models)
 
-    kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
-    i_oofs = []
-    args = []
+    saved_model_files = glob(f"{model_path}/*.joblib")
 
-    for fold_n, (i_fold, i_oof) in enumerate(
-        kfold.split(train.index, train["race_group"])
-    ):
-        i_oofs.append(i_oof)
-        for m_name, m_config in models.items():
-            if not glob(f"{model_path}/{m_name}-{fold_n}.joblib"):
-                args.append((m_name, m_config, fold_n, i_fold, i_oof))
+    if not saved_model_files:
+        print(f"no saved model files in {model_path}", file=sys.stderr)
+        sys.exit(1)
 
-    if args:
-        with Pool(min(os.cpu_count(), len(args))) as pool:
-            m_fold_y_pred_oofs = pool.starmap(fit_fold_model, args)
-
-    if len(args) == kfold.get_n_splits() * len(models):
-        y_pred_oof_by_m = defaultdict(lambda: np.zeros(len(train)))
-
-        for m_name, fold_n, y_pred_oof in m_fold_y_pred_oofs:
-            y_pred_oof_by_m[m_name][i_oofs[fold_n]] = y_pred_oof
-
-        y_pred_oof_by_m = dict(y_pred_oof_by_m)
-        pool_size = os.cpu_count()
-        args = [(n, y_pred_oof_by_m) for n in range(pool_size)]
-
-        with Pool(pool_size) as pool:
-            studies = pool.starmap(optimize_weights, args)
-
-        print("\nIndividual model scores")
-
-        for m_name in y_pred_oof_by_m.keys():
-            y_pred_oof_by_m[m_name] = rankdata(y_pred_oof_by_m[m_name])
-            score = calc_score(y_pred_oof_by_m[m_name])
-            print(f"  {score:.4f} {m_name}")
-
-        print("\nEvenly-weighted ensemble score")
-        y_pred_oof = sum(y_pred_oof_by_m.values())
-        calc_score(y_pred_oof, debug=True, indent=2)
-        sorted_studies = []
-
-        for study in studies:
-            sorted_studies.append((study.best_value, study))
-
-        sorted_studies.sort()
-        study = sorted_studies[-1][1]
-        print("\nOptimized weights")
-
-        for weight, m_name in sorted((w, m) for m, w in study.best_params.items()):
-            print(f"  {weight:.4f} {m_name}")
-
-        with open(BEST_WEIGHTS_FILENAME, "w") as f:
-            json.dump(study.best_params, f)
-
-        print("\nOptimally-weighted ensemble score")
-
-        for race, score in study.best_trial.user_attrs["by_race"].items():
-            print(f"{score:.4f} {race}")
-
-        mean = study.best_trial.user_attrs["mean"]
-        stddev = study.best_trial.user_attrs["stddev"]
-        print(f"  {study.best_value:.4f}: mean={mean:.4f} stddev={stddev:.4f}\n")
-
-    # -------------------------------------------------------------------------
+    with open(best_weights_path) as f:
+        best_weights = json.load(f)
+        pprint(best_weights)
 
     y_pred_by_m = defaultdict(list)
     xgb_aft_test = as_xgb_aft(X_test)
     cb_aft_test = as_cb_aft(X_test, cat_features)
     coxnet_test = preprocess_X_coxnet(X_test)
 
-    for fn in glob(f"{model_path}/*.joblib"):
+    for fn in saved_model_files:
         m = joblib.load(fn)
         m_name, fold_n = fn.split("/")[-1].split(".")[0].split("-")
         m_config = models[m_name]
@@ -556,9 +569,6 @@ def main():
 
     for m_name, y_pred in y_pred_by_m.items():
         y_pred_by_m[m_name] = rankdata(np.sum(y_pred, axis=0))
-
-    with open(BEST_WEIGHTS_FILENAME) as f:
-        best_weights = json.load(f)
 
     y_pred = np.sum(
         (best_weights[m_name] * y_pred for m_name, y_pred in y_pred_by_m.items()),
